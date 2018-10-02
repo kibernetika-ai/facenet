@@ -89,7 +89,6 @@ spec:
         cpu: kuberlab/openvino:cpu-36
         gpu: ""
       name: worker
-      nodes: knode:movidius
       replicas: 1
       resources:
         limits:
@@ -125,6 +124,9 @@ spec:
       repository: {{ gitRepo .src.value }}
       accountId: '{{ .src.accountId }}'
       revision: '{{ .src.revision }}'
+    isLibDir: false
+    name: src
+    subPath: {{ gitSubPath .src.value }}
   - clusterStorage: '{{ .storage.value }}'
     isLibDir: true
     name: lib
