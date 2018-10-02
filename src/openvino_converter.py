@@ -24,9 +24,9 @@ def push_model(target, dirame):
         from mlboardclient.api import client
         timestamp = datetime.datetime.now().strftime('%s')
         if target is not None:
-            version = '1.0.0-{}-{}'.format(target, timestamp)
+            version = '1.0.0-openvino-{}-{}'.format(target, timestamp)
         else:
-            version = '1.0.0-{}'.format(timestamp)
+            version = '1.0.0-openvino-{}'.format(timestamp)
         mlboard = client.Client()
         mlboard.model_upload('facenet', version, dirame)
         submit({'model': catalog_ref('facenet','mlmodel',version)})
