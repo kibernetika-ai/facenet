@@ -29,7 +29,7 @@ spec:
       workDir: $SRC_DIR
   - name: train-classifier
     resources:
-    - command: python classifier_train.py TRAIN $TRAINING_DIR/faces_160 $MODEL_DIR/facenet.xml $TRAINING_DIR/classifier.pkl --driver openvino --device CPU
+    - command: python3 classifier_train.py TRAIN $TRAINING_DIR/faces_160 $MODEL_DIR/facenet.xml $TRAINING_DIR/classifier.pkl --driver openvino --device CPU
       default_volume_mapping: true
       images:
         cpu: kuberlab/serving:latest-openvino
