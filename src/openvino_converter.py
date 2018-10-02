@@ -49,7 +49,6 @@ def push_dataset(target, dirame):
 def conver_onet(dir,model_dir, data_type='FP32'):
     # Set batch size for conversion
     batch_size = 8
-    dir = os.path.join(dir, "onet")
     if not os.path.exists(dir):
         os.mkdir(dir)
 
@@ -89,7 +88,6 @@ def conver_onet(dir,model_dir, data_type='FP32'):
 
 
 def convert_rnet(dir,model_dir, data_type='FP32'):
-    dir = os.path.join(dir, "rnet")
     if not os.path.exists(dir):
         os.mkdir(dir)
     tf.reset_default_graph()
@@ -127,7 +125,6 @@ def convert_rnet(dir,model_dir, data_type='FP32'):
 
 def convert_pnet(dir,model_dir, h, w, data_type='FP32'):
     logging.info("Prepare PNET-{}x{} graph".format(h, w))
-    dir = os.path.join(dir, 'pnet'.format(h, w))
     if not os.path.exists(dir):
         os.mkdir(dir)
     tf.reset_default_graph()
