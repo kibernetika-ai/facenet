@@ -19,7 +19,7 @@ dataset:
  version: '2018.4.2-vgg'
  workspace: 'kuberlab-demo'
  wizard:
-   name: "Dataset configuration"
+   name: "Pre trained model catal"
    kind: dataset
 
 faces:
@@ -27,5 +27,5 @@ faces:
  version: ''
  workspace: ''
  wizard:
-   name: "Dataset configuration"
+   name: "Faces Dataset"
    kind: dataset
