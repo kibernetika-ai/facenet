@@ -37,9 +37,9 @@ def push_dataset(target, dirame):
         from mlboardclient.api import client
         timestamp = datetime.datetime.now().strftime('%s')
         if target is not None:
-            version = '1.0.0-{}-{}'.format(target, timestamp)
+            version = '1.0.0-openvino-{}-{}'.format(target, timestamp)
         else:
-            version = '1.0.0-{}'.format(timestamp)
+            version = '1.0.0-openvino-{}'.format(timestamp)
         mlboard = client.Client()
         mlboard.datasets.push(os.environ.get('WORKSPACE_NAME'),'facenet-pretrained',version,dirame,create=True)
         submit({'model': catalog_ref('facenet-pretrained','dataset',version)})
