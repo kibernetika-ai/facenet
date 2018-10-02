@@ -10,7 +10,7 @@ spec:
   tasks:
   - name: align-images
     resources:
-    - command: rm -rf $TRAINING_DIR/faces_160/* && python align/align_dataset_mtcnn.py
+    - command: rm -rf $TRAINING_DIR/faces_160/* && python align_dataset_mtcnn.py
         $FACES_DIR $TRAINING_DIR/faces_160 --image_size 160  --margin 32
       default_volume_mapping: true
       images:
