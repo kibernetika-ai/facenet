@@ -49,10 +49,6 @@ def push_dataset(target, dirame):
 def conver_onet(dir,model_dir, data_type='FP32'):
     # Set batch size for conversion
     batch_size = 8
-
-    out_dir = os.path.join(dir, "openvino")
-    if not os.path.exists(out_dir):
-        os.mkdir(out_dir)
     dir = os.path.join(dir, "onet")
     if not os.path.exists(dir):
         os.mkdir(dir)
@@ -93,9 +89,6 @@ def conver_onet(dir,model_dir, data_type='FP32'):
 
 
 def convert_rnet(dir,model_dir, data_type='FP32'):
-    out_dir = os.path.join(dir, "openvino")
-    if not os.path.exists(out_dir):
-        os.mkdir(out_dir)
     dir = os.path.join(dir, "rnet")
     if not os.path.exists(dir):
         os.mkdir(dir)
@@ -134,9 +127,6 @@ def convert_rnet(dir,model_dir, data_type='FP32'):
 
 def convert_pnet(dir,model_dir, h, w, data_type='FP32'):
     logging.info("Prepare PNET-{}x{} graph".format(h, w))
-    out_dir = os.path.join(dir, "openvino")
-    if not os.path.exists(out_dir):
-        os.mkdir(out_dir)
     dir = os.path.join(dir, 'pnet'.format(h, w))
     if not os.path.exists(dir):
         os.mkdir(dir)
@@ -196,16 +186,12 @@ def prepare_pnet(dir,model_dir, data_type='FP32'):
 
 
 def convert_facenet(dir, frozen_graph_path, data_type='FP32'):
-    out_dir = os.path.join(dir, 'openvino')
-    if not os.path.exists(out_dir):
-        os.mkdir(out_dir)
-    dir = os.path.join(dir, "facenet")
     if not os.path.exists(dir):
         os.mkdir(dir)
 
     cmd = (
         'mo_tf.py --input_model {0} --freeze_placeholder_with_value'
-        ' "phase_train->False" --data_type {1} --output_dir {2}'.format(
+        ' "phase_train->False" --data_type {1} --output_dir {2} --model_name facenet'.format(
             frozen_graph_path, data_type, dir
         )
     )
@@ -325,11 +311,10 @@ def main():
                 raise RuntimeError('Argument --facenet_graph is missing.')
 
             convert_facenet(args.training_dir, args.facenet_graph, data_type=data_type)
-    out_dir = os.path.join(args.training_dir, "openvino")
     if args.do_push_mode:
-        push_model(args.target, out_dir)
+        push_model(args.target, args.training_dir)
     if args.do_push_dataset:
-        push_dataset(args.target, out_dir)
+        push_dataset(args.target, args.training_dir)
 
 
 if __name__ == "__main__":
