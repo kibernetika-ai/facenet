@@ -1,0 +1,14 @@
+Description: Facenet OpenVino
+Engine: gotpl
+Home: https://kuberlab.com
+Keywords:
+- kuberlab
+- facenet
+- openvino
+- intel-zoo
+Maintainers:
+- Email: support@kuberlab.com
+  Name: kuberlab
+Name: facenet-openvino
+Type: mlapp-v2
+Version: 1.0.0

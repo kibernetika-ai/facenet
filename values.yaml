@@ -1,0 +1,31 @@
+
+storage:
+ value: default
+ wizard:
+   name: "Storage Configuration"
+   kind: cluster_storage
+
+
+src:
+  value: https://github.com/kibernetika-ai/facenet
+  accountId: ''
+  revision: ''
+  wizard:
+    name: "Source Code"
+    kind: git
+
+dataset:
+ value: 'facenet-pretrained'
+ version: '2018.4.2-vgg'
+ workspace: 'kuberlab-demo'
+ wizard:
+   name: "Dataset configuration"
+   kind: dataset
+
+faces:
+ value: ''
+ version: ''
+ workspace: ''
+ wizard:
+   name: "Dataset configuration"
+   kind: dataset

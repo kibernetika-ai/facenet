@@ -1,0 +1,10 @@
+- name: upload_threshold
+  type: float
+  value: 0.9
+  label: Upload model to catalog
+  width: 50
+- name: driver
+  type: string
+  value: openvino
+  label: Driver used for facenet inference
+  width: 50

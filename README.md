@@ -1,1 +1,1 @@
-# facenet
+# Face Detection and Recognition using OpenVino

@@ -1,0 +1,150 @@
+kind: MLApp
+metadata:
+  name: openvino-facenet
+spec:
+  default_mount_path: /notebooks
+  default_read_only: false
+  package_manager: pip3
+  packages:
+  - manager: pip3
+  tasks:
+  - name: align-images
+    resources:
+    - command: rm -rf $TRAINING_DIR/faces_160/* && python align/align_dataset_mtcnn.py
+        $FACES_DIR $TRAINING_DIR/faces_160 --image_size 160  --margin 32
+      default_volume_mapping: true
+      images:
+        cpu: kuberlab/tensorflow:cpu-36-1.7.0-full
+        gpu: kuberlab/tensorflow:gpu-36-1.7.0-full
+      name: worker
+      replicas: 1
+      resources:
+        limits:
+          cpu: "1"
+          memory: 8Gi
+        requests:
+          cpu: 100m
+          memory: 64Mi
+      restartPolicy: Never
+      workDir: $SRC_DIR
+  - name: train-classifier
+    resources:
+    - command: python classifier_train.py TRAIN $TRAINING_DIR/faces_160 $MODEL_DIR/20180408-102900.xml $TRAINING_DIR/classifier.pkl --driver openvino --device CPU
+      default_volume_mapping: true
+      images:
+        cpu: kuberlab/serving:latest-openvino
+        gpu: kuberlab/serving:latest-openvino
+      name: worker
+      replicas: 1
+      resources:
+        limits:
+          cpu: "1"
+          memory: 8Gi
+        requests:
+          cpu: 100m
+          memory: 64Mi
+      restartPolicy: Never
+      workDir: $SRC_DIR
+  - name: validate-classifier
+    resources:
+    - command: python3 classifier_train.py CLASSIFY $TRAINING_DIR/faces_160 $MODEL_DIR/20180408-102900.xml $TRAINING_DIR/classifier.pkl --upload-model --upload-threshold 0.9 --driver openvino --device CPU
+      default_volume_mapping: true
+      images:
+        cpu: kuberlab/serving:latest-openvino
+        gpu: kuberlab/serving:latest-openvino
+      name: worker
+      replicas: 1
+      resources:
+        limits:
+          cpu: "1"
+          memory: 8Gi
+        requests:
+          cpu: 100m
+          memory: 64Mi
+      restartPolicy: Never
+      workDir: $SRC_DIR
+  - name: pipeline
+    resources:
+    - command: python pipeline.py
+      default_volume_mapping: true
+      images:
+        cpu: kuberlab/tensorflow:cpu-36-1.7.0-full
+        gpu: kuberlab/tensorflow:gpu-36-1.7.0-full
+      name: worker
+      replicas: 1
+      resources:
+        limits:
+          cpu: "1"
+          memory: 8Gi
+        requests:
+          cpu: 100m
+          memory: 64Mi
+      restartPolicy: Never
+      workDir: $SRC_DIR
+  - name: model-converter
+    resources:
+    - command: python openvino_converter.py --all --training_dir /tmp --do_push_dataset --facenet_graph $MODEL_DIR/*.pb --target CPU --align_model_dir $MODEL_DIR
+      default_volume_mapping: true
+      images:
+        cpu: kuberlab/openvino:cpu-36
+        gpu: ""
+      name: worker
+      nodes: knode:movidius
+      replicas: 1
+      resources:
+        limits:
+          cpu: "1"
+          memory: 8Gi
+        requests:
+          cpu: 100m
+          memory: 64Mi
+      restartPolicy: Never
+      workDir: $SRC_DIR
+  uix:
+  - default_volume_mapping: true
+    displayName: Jupyter
+    images:
+      cpu: kuberlab/tensorflow:cpu-36-1.7.0-full
+    name: jupyter
+    ports:
+    - name: http
+      port: 8888
+      protocol: TCP
+      targetPort: 8888
+    resources:
+      limits:
+        cpu: "1"
+        memory: 4Gi
+      requests:
+        cpu: 100m
+        memory: 64Mi
+  volumes:
+  - clusterStorage: '{{ .storage.value }}'
+    name: training
+  - gitRepo:
+      repository: {{ gitRepo .src.value }}
+      accountId: '{{ .src.accountId }}'
+      revision: '{{ .src.revision }}'
+  - clusterStorage: '{{ .storage.value }}'
+    isLibDir: true
+    name: lib
+  - clusterStorage: '{{ .storage.value }}'
+    mountPath: /notebooks
+    name: code
+    subPath: code
+  - isLibDir: false
+    name: model
+    datasetFS:
+      workspace: {{ .model.workspace }}
+      dataset: {{ .model.value }}
+      version: {{ .model.version }}
+  - isLibDir: false
+    name: faces
+    {{- if .faces.value }}
+    datasetFS:
+      workspace: {{ .faces.workspace }}
+      dataset: {{ .faces.value }}
+      version: {{ .faces.version }}
+    {{- else }}
+    clusterStorage: {{ .storage.value }}
+    {{- end }}
