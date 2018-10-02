@@ -11,7 +11,7 @@ spec:
   - name: align-images
     resources:
     - command: rm -rf $TRAINING_DIR/faces_160/* && python align_dataset_mtcnn.py
-        $FACES_DIR $TRAINING_DIR/faces_160 --image_size 160  --margin 32
+        $FACES_DIR $TRAINING_DIR/faces_160 --image_size 160  --margin 32 --model_dir $MODEL_DIR
       default_volume_mapping: true
       images:
         cpu: kuberlab/tensorflow:cpu-36-1.7.0-full

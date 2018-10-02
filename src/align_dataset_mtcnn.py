@@ -56,7 +56,7 @@ def main(args):
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_memory_fraction)
         sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
         with sess.as_default():
-            pnet, rnet, onet = align.detect_face.create_mtcnn(sess, None)
+            pnet, rnet, onet = align.detect_face.create_mtcnn(sess, args.model_dir)
 
     minsize = 20  # minimum size of face
     threshold = [0.6, 0.7, 0.7]  # three steps's threshold
@@ -156,6 +156,8 @@ def parse_arguments(argv):
 
     parser.add_argument('input_dir', type=str, help='Directory with unaligned images.')
     parser.add_argument('output_dir', type=str, help='Directory with aligned face thumbnails.')
+    parser.add_argument('--model_dir', type=str, default=None,
+                        help='Model location')
     parser.add_argument('--image_size', type=int,
                         help='Image size (height, width) in pixels.', default=182)
     parser.add_argument('--margin', type=int,
