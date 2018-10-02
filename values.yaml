@@ -14,12 +14,12 @@ src:
     name: "Source Code"
     kind: git
 
-dataset:
+model:
  value: 'facenet-pretrained'
- version: '2018.4.2-vgg'
+ version: '2018.4.8-casia '
  workspace: 'kuberlab-demo'
  wizard:
-   name: "Pre trained model catal"
+   name: "Pre trained model catalog"
    kind: dataset
 
 faces:
