@@ -51,6 +51,9 @@ def update_data(data, use_mlboard, mlboard):
     if use_mlboard and mlboard:
         mlboard.update_task_info(data)
 
+def catalog_ref(name,ctype,version):
+    return '#/{}/catalog/{}/{}/versions/{}'. \
+        format(os.environ.get('WORKSPACE_NAME'),ctype,name,version)
 
 def upload_model(use_mlboard, mlboard, classifier_path, model, version):
     if not use_mlboard or not mlboard:
@@ -60,10 +63,11 @@ def upload_model(use_mlboard, mlboard, classifier_path, model, version):
     dirname = '/tmp/classifier'
     os.makedirs(dirname)
     shutil.copy(classifier_path, path.join(dirname, path.basename(classifier_path)))
+    #shutil.shutil.copy()
     mlboard.model_upload(model, version, dirname)
 
     shutil.rmtree(dirname)
-    update_data({'model_uploaded': True}, use_mlboard, mlboard)
+    update_data({'model_reference': catalog_ref(model,'mlmodel',version)}, use_mlboard, mlboard)
     print("New model uploaded as '%s', version '%s'." % (model, version))
 
 
