@@ -23,9 +23,9 @@ model:
    kind: dataset
 
 faces:
- value: ''
- version: ''
- workspace: ''
+ value: 'faces'
+ version: '1.0.1'
+ workspace: 'kuberlab-demo'
  wizard:
    name: "Faces Dataset"
    kind: dataset
