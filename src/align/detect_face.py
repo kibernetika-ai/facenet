@@ -1093,6 +1093,7 @@ def detect_face(img, minsize, pnet, rnet, onet, threshold, factor, resolutions=N
             total_boxes = np.append(total_boxes, boxes, axis=0)
 
     numbox = total_boxes.shape[0]
+
     if numbox > 0:
         pick = nms(total_boxes.copy(), 0.7, 'Union')
         total_boxes = total_boxes[pick, :]

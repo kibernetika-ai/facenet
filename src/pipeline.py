@@ -2,7 +2,9 @@
 #  Runs align -> train -> validate tasks.
 #  Validate task also may upload the model.
 ##
+import argparse
 import logging
+import re
 import sys
 
 from mlboardclient.api import client
@@ -16,11 +18,54 @@ mlboard = client.Client()
 run_tasks = ['align-images', 'train-classifier', 'validate-classifier']
 
 
+def override_task_arguments(task, params):
+    for k, v in params.items():
+        pattern = re.compile('{}[ =]([^\s]+|[\'"].*?[\'"])'.format(k))
+        resource = task.config['resources'][0]
+        task_cmd = resource['command']
+        replacement = '{} {}'.format(k, v)
+        if pattern.findall(task_cmd):
+            # Replace
+            resource['command'] = pattern.sub(
+                replacement,
+                task_cmd
+            )
+        else:
+            # Add
+            if 'args' in resource:
+                resource['args'][k] = v
+            else:
+                resource['args'] = {k: v}
+
+
+def get_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('upload-threshold')
+    parser.add_argument('driver')
+
+    return parser
+
+
 def main():
+    parser = get_parser()
+    args = parser.parse_args()
+
+    override_args = {
+        'validate-classifier': {
+            'upload-threshold': args.upload_threshold,
+            'driver': args.driver,
+        },
+        'train-classifier': {
+            'driver': args.driver,
+        }
+    }
+
     app = mlboard.apps.get()
 
     for task in run_tasks:
         t = app.tasks.get(task)
+        if t.name in override_args and override_args[t.name]:
+            override_task_arguments(t, override_args[t.name])
 
         LOG.info("Start task %s..." % t.name)
         started = t.start()

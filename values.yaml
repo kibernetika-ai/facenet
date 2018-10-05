@@ -16,7 +16,7 @@ src:
 
 model:
  value: 'facenet-pretrained'
- version: '2018.4.8-casia '
+ version: '1.0.1-CPU'
  workspace: 'kuberlab-demo'
  wizard:
    name: "Pre trained model catalog"

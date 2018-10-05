@@ -2,6 +2,7 @@ import align.detect_face as df
 import tensorflow as tf
 import os
 import numpy as np
+import shutil
 import subprocess
 import logging
 import argparse
@@ -14,9 +15,12 @@ def submit(params):
         client.update_task_info(params)
 
 
-def catalog_ref(name,ctype,version):
-    return '#/{}/catalog/{}/{}/versions/{}'.\
-        format(os.environ.get('WORKSPACE_NAME'),ctype,name,version)
+def catalog_ref(name, ctype, version):
+    return (
+        '#/{}/catalog/{}/{}/versions/{}'.format(
+            os.environ.get('WORKSPACE_NAME'), ctype, name, version
+        )
+    )
 
 
 def push_model(target, dirame):
@@ -29,10 +33,13 @@ def push_model(target, dirame):
             version = '1.0.0-openvino-{}'.format(timestamp)
         mlboard = client.Client()
         mlboard.model_upload('facenet', version, dirame)
-        submit({'model': catalog_ref('facenet','mlmodel',version)})
-        logging.info("New model uploaded as 'facenet', version '%s'." % (version))
+        submit({'model': catalog_ref('facenet', 'mlmodel', version)})
+        logging.info(
+            "New model uploaded as 'facenet', version '{}'.".format(version)
+        )
 
-def push_dataset(target, dirame):
+
+def push_dataset(target, dirname):
     if os.environ.get('PROJECT_ID', None):
         from mlboardclient.api import client
         timestamp = datetime.datetime.now().strftime('%s')
@@ -41,14 +48,25 @@ def push_dataset(target, dirame):
         else:
             version = '1.0.0-openvino-{}'.format(timestamp)
         mlboard = client.Client()
-        mlboard.datasets.push(os.environ.get('WORKSPACE_NAME'),'facenet-pretrained',version,dirame,create=True)
-        submit({'model': catalog_ref('facenet-pretrained','dataset',version)})
-        logging.info("New model uploaded as 'facenet-pretrained', version '%s'." % (version))
+        mlboard.datasets.push(
+            os.environ.get('WORKSPACE_NAME'),
+            'facenet-pretrained',
+            version,
+            dirname,
+            create=True
+        )
+        submit(
+            {'model': catalog_ref('facenet-pretrained', 'dataset', version)}
+        )
+        logging.info(
+            "New model uploaded as 'facenet-pretrained', "
+            "version '{}'.".format(version)
+        )
 
 
-def conver_onet(dir,model_dir, data_type='FP32'):
+def convert_onet(dir, model_dir, data_type='FP32'):
     # Set batch size for conversion
-    batch_size = 8
+    batch_size = 2
     if not os.path.exists(dir):
         os.mkdir(dir)
 
@@ -73,21 +91,24 @@ def conver_onet(dir,model_dir, data_type='FP32'):
         logging.info("Freeze ONET graph")
 
         output_graph_def = tf.graph_util.convert_variables_to_constants(
-            sess, graph.as_graph_def(), ['onet/output0', 'onet/output1', 'onet/output2']
+            sess,
+            graph.as_graph_def(),
+            ['onet/output0', 'onet/output1', 'onet/output2']
         )
         # Finally we serialize and dump the output graph to the filesystem
         with tf.gfile.GFile(os.path.join(dir, 'onet.pb'), "wb") as f:
             f.write(output_graph_def.SerializeToString())
 
-        cmd = 'mo_tf.py --input_model {0}/onet.pb --output_dir {0} --data_type {1} --batch {2}'.format(
-            dir, data_type, batch_size
+        cmd = (
+            'mo_tf.py --input_model {0}/onet.pb --output_dir {0} '
+            '--data_type {1} --batch {2}'.format(dir, data_type, batch_size)
         )
         logging.info('Compile: %s', cmd)
         result = subprocess.check_output(cmd, shell=True).decode()
         logging.info(result)
 
 
-def convert_rnet(dir,model_dir, data_type='FP32'):
+def convert_rnet(dir, model_dir, data_type='FP32'):
     if not os.path.exists(dir):
         os.mkdir(dir)
     tf.reset_default_graph()
@@ -117,13 +138,16 @@ def convert_rnet(dir,model_dir, data_type='FP32'):
         with tf.gfile.GFile(os.path.join(dir, 'rnet.pb'), "wb") as f:
             f.write(output_graph_def.SerializeToString())
 
-        cmd = 'mo_tf.py --input_model {0}/rnet.pb --output_dir {0} --data_type {1}'.format(dir, data_type)
+        cmd = (
+            'mo_tf.py --input_model {0}/rnet.pb --output_dir {0} '
+            '--data_type {1}'.format(dir, data_type)
+        )
         logging.info('Compile: %s', cmd)
         result = subprocess.check_output(cmd, shell=True).decode()
         logging.info(result)
 
 
-def convert_pnet(dir,model_dir, h, w, data_type='FP32'):
+def convert_pnet(dir, model_dir, h, w, data_type='FP32'):
     logging.info("Prepare PNET-{}x{} graph".format(h, w))
     if not os.path.exists(dir):
         os.mkdir(dir)
@@ -155,13 +179,16 @@ def convert_pnet(dir,model_dir, h, w, data_type='FP32'):
         with tf.gfile.GFile(os.path.join(dir, out_file), "wb") as f:
             f.write(output_graph_def.SerializeToString())
 
-        cmd = 'mo_tf.py --input_model {0}/{1} --output_dir {0} --data_type {2}'.format(dir, out_file, data_type)
+        cmd = (
+            'mo_tf.py --input_model {0}/{1} --output_dir {0} '
+            '--data_type {2}'.format(dir, out_file, data_type)
+        )
         logging.info('Compile: %s', cmd)
         result = subprocess.check_output(cmd, shell=True).decode()
         logging.info(result)
 
 
-def prepare_pnet(dir,model_dir, data_type='FP32'):
+def prepare_pnet(dir, model_dir, data_type='FP32'):
     minsize = 20  # minimum size of face
     factor = 0.709  # scale factor
     factor_count = 0
@@ -179,7 +206,7 @@ def prepare_pnet(dir,model_dir, data_type='FP32'):
     for scale in scales:
         hs = int(np.ceil(h * scale))
         ws = int(np.ceil(w * scale))
-        convert_pnet(dir,model_dir, hs, ws, data_type=data_type)
+        convert_pnet(dir, model_dir, hs, ws, data_type=data_type)
 
 
 def convert_facenet(dir, frozen_graph_path, data_type='FP32'):
@@ -188,9 +215,8 @@ def convert_facenet(dir, frozen_graph_path, data_type='FP32'):
 
     cmd = (
         'mo_tf.py --input_model {0} --freeze_placeholder_with_value'
-        ' "phase_train->False" --data_type {1} --output_dir {2} --model_name facenet'.format(
-            frozen_graph_path, data_type, dir
-        )
+        ' "phase_train->False" --data_type {1} --output_dir {2} '
+        '--model_name facenet'.format(frozen_graph_path, data_type, dir)
     )
     logging.info('Compile: %s', cmd)
     result = subprocess.check_output(cmd, shell=True).decode()
@@ -232,7 +258,7 @@ def parse_args():
         help='Build FACENET'
     )
     parser.add_argument(
-        '--do_push_mode',
+        '--do_push_model',
         action='store_true',
         help='Push model to catalog'
     )
@@ -290,25 +316,33 @@ def main():
         if not args.facenet_graph:
             raise RuntimeError('Argument --facenet_graph is missing.')
 
-        conver_onet(args.training_dir,args.align_model_dir, data_type=data_type)
-        convert_rnet(args.training_dir,args.align_model_dir, data_type=data_type)
-        prepare_pnet(args.training_dir,args.align_model_dir, data_type=data_type)
+        convert_onet(args.training_dir, args.align_model_dir, data_type=data_type)
+        convert_rnet(args.training_dir, args.align_model_dir, data_type=data_type)
+        prepare_pnet(args.training_dir, args.align_model_dir, data_type=data_type)
         convert_facenet(
             args.training_dir, args.facenet_graph, data_type=data_type
         )
     else:
         if args.onet:
-            conver_onet(args.training_dir,args.align_model_dir, data_type=data_type)
+            convert_onet(args.training_dir, args.align_model_dir, data_type=data_type)
         if args.rnet:
-            convert_rnet(args.training_dir,args.align_model_dir, data_type=data_type)
+            convert_rnet(args.training_dir, args.align_model_dir, data_type=data_type)
         if args.pnet:
-            prepare_pnet(args.training_dir,args.align_model_dir, data_type=data_type)
+            prepare_pnet(args.training_dir, args.align_model_dir, data_type=data_type)
         if args.facenet:
             if not args.facenet_graph:
                 raise RuntimeError('Argument --facenet_graph is missing.')
 
             convert_facenet(args.training_dir, args.facenet_graph, data_type=data_type)
-    if args.do_push_mode:
+
+    if args.do_push_model or args.do_push_dataset:
+        # Copy .npy files to model/dataset
+        dirname = args.align_model_dir
+        shutil.copy(os.path.join(dirname, 'det1.npy'), args.training_dir)
+        shutil.copy(os.path.join(dirname, 'det2.npy'), args.training_dir)
+        shutil.copy(os.path.join(dirname, 'det3.npy'), args.training_dir)
+
+    if args.do_push_model:
         push_model(args.target, args.training_dir)
     if args.do_push_dataset:
         push_dataset(args.target, args.training_dir)
