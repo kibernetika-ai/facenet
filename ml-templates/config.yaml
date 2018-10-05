@@ -126,7 +126,7 @@ spec:
       revision: '{{ .src.revision }}'
     isLibDir: false
     name: src
-    subPath: {{ gitSubPath .src.value }}
+    subPath: {{ gitSubPath .src.value }}/src
   - clusterStorage: '{{ .storage.value }}'
     isLibDir: true
     name: lib

@@ -40,7 +40,7 @@ def override_task_arguments(task, params):
 
 def get_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('upload-threshold')
+    parser.add_argument('upload_threshold')
     parser.add_argument('driver')
 
     return parser
