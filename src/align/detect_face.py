@@ -1051,30 +1051,25 @@ def detect_face(img, minsize, pnet, rnet, onet, threshold, factor, resolutions=N
     threshold: threshold=[th1, th2, th3], th1-3 are three steps's threshold
     factor: the factor used to create a scaling pyramid of face sizes to detect in the image.
     """
-    # factor_count=0
+    factor_count = 0
     total_boxes = np.empty((0, 9))
     points = np.empty(0)
     h = img.shape[0]
     w = img.shape[1]
-    # minl=np.amin([h, w])
-    # m=12.0/minsize
-    # minl=minl*m
+    minl = np.amin([h, w])
+    m = 12.0 / minsize
+    minl = minl * m
     # create scale pyramid
-    # scales=[]
-    # while minl>=12:
-    #    scales += [m*np.power(factor, factor_count)]
-    #    minl = minl*factor
-    #   factor_count += 1
+    scales = []
+    while minl >= 12:
+        scales += [m * np.power(factor, factor_count)]
+        minl = minl * factor
+        factor_count += 1
 
     # first stage
-    if resolutions is None:
-        resolutions = [(14, 19), (19, 27), (26, 37), (37, 52), (73, 104), (103, 146), (145, 206), (205, 290),
-                       (288, 408)]
-    for r1 in resolutions:
-        if r1[0] < 0:
-            continue
-        hs = r1[0]
-        ws = r1[1]
+    for scale in scales:
+        hs = int(np.ceil(h * scale))
+        ws = int(np.ceil(w * scale))
         scale = float(ws) / float(img.shape[1])
         im_data = imresample(img, (hs, ws))
         im_data = (im_data - 127.5) * 0.0078125
@@ -1106,9 +1101,6 @@ def detect_face(img, minsize, pnet, rnet, onet, threshold, factor, resolutions=N
         total_boxes = np.transpose(np.vstack([qq1, qq2, qq3, qq4, total_boxes[:, 4]]))
         total_boxes = rerec(total_boxes.copy())
         total_boxes[:, 0:4] = np.fix(total_boxes[:, 0:4]).astype(np.int32)
-        dy, edy, dx, edx, y, ey, x, ex, tmpw, tmph = pad(total_boxes.copy(), w, h)
-
-    numbox = total_boxes.shape[0]
 
     numbox = total_boxes.shape[0]
     if numbox > 0:
@@ -1118,6 +1110,15 @@ def detect_face(img, minsize, pnet, rnet, onet, threshold, factor, resolutions=N
         tempimg = np.zeros((48, 48, 3, numbox))
         for k in range(0, numbox):
             tmp = np.zeros((int(tmph[k]), int(tmpw[k]), 3))
+            if edy[k] < dy[k] - 1:
+                dy[k], edy[k] = edy[k], dy[k]
+            if dx[k] < dx[k] - 1:
+                dx[k], edx[k] = edx[k], dx[k]
+            if ey[k] < y[k] - 1:
+                y[k], ey[k] = ey[k], y[k]
+            if dx[k] < dx[k] - 1:
+                x[k], ex[k] = ex[k], x[k]
+
             tmp[dy[k] - 1:edy[k], dx[k] - 1:edx[k], :] = img[y[k] - 1:ey[k], x[k] - 1:ex[k], :]
             if tmp.shape[0] > 0 and tmp.shape[1] > 0 or tmp.shape[0] == 0 and tmp.shape[1] == 0:
                 tempimg[:, :, :, k] = imresample(tmp, (48, 48))
@@ -1249,6 +1250,15 @@ def detect_face_openvino(img, pnets, rnet, onet, threshold):
         tempimg = np.zeros((48, 48, 3, numbox))
         for k in range(0, numbox):
             tmp = np.zeros((int(tmph[k]), int(tmpw[k]), 3))
+            if edy[k] < dy[k] - 1:
+                dy[k], edy[k] = edy[k], dy[k]
+            if dx[k] < dx[k] - 1:
+                dx[k], edx[k] = edx[k], dx[k]
+            if ey[k] < y[k] - 1:
+                y[k], ey[k] = ey[k], y[k]
+            if dx[k] < dx[k] - 1:
+                x[k], ex[k] = ex[k], x[k]
+
             tmp[dy[k] - 1:edy[k], dx[k] - 1:edx[k], :] = img[y[k] - 1:ey[k], x[k] - 1:ex[k], :]
             if tmp.shape[0] > 0 and tmp.shape[1] > 0 or tmp.shape[0] == 0 and tmp.shape[1] == 0:
                 tempimg[:, :, :, k] = imresample(tmp, (48, 48))

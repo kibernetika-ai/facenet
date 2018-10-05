@@ -113,6 +113,38 @@ def load_nets(**kwargs):
         (model, class_names) = pickle.load(**opts)
 
 
+def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
+    # initialize the dimensions of the image to be resized and
+    # grab the image size
+    dim = None
+    (h, w) = image.shape[:2]
+
+    # if both the width and height are None, then return the
+    # original image
+    if width is None and height is None:
+        return image
+
+    # check to see if the width is None
+    if width is None:
+        # calculate the ratio of the height and construct the
+        # dimensions
+        r = height / float(h)
+        dim = (int(w * r), height)
+
+    # otherwise, the height is None
+    else:
+        # calculate the ratio of the width and construct the
+        # dimensions
+        r = width / float(w)
+        dim = (width, int(h * r))
+
+    # resize the image
+    resized = cv2.resize(image, dim, interpolation = inter)
+
+    # return the resized image
+    return resized
+
+
 def preprocess(inputs, ctx, **kwargs):
     global net_loaded
     if not net_loaded:
@@ -130,16 +162,29 @@ def preprocess(inputs, ctx, **kwargs):
         image = rgba_image.convert('RGB')
         image = np.array(image)
 
-    if image.shape[0] > height or image.shape[1] > width:
-        frame = cv2.resize(
-            image, (width, height), interpolation=cv2.INTER_AREA
-        )
-        scaled = True
-    else:
-        frame = image
-        scaled = False
+    if image.shape[2] == 4:
+        # Convert RGBA -> RGB
+        rgba_image = Image.fromarray(image)
+        image = rgba_image.convert('RGB')
+        image = np.array(image)
 
     use_tf = PARAMS['use_tf']
+    frame = image
+    scaled = (1, 1)
+
+    if use_tf:
+        if image.shape[0] > height:
+            frame = image_resize(image, height=height)
+        elif image.shape[1] > width:
+            frame = image_resize(image, width=width)
+            scaled = (float(width) / image.shape[1], float(height) / image.shape[0])
+    else:
+        if image.shape[0] > height or image.shape[1] > width:
+            frame = cv2.resize(
+                image, (width, height), interpolation=cv2.INTER_AREA
+            )
+            scaled = (float(width) / frame.shape[1], float(height) / frame.shape[0])
+
     if use_tf:
         bounding_boxes, _ = detect_face.detect_face(
             frame, 20, pnets, rnet, onet, PARAMS['threshold'], 0.709
