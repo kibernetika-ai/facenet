@@ -8,7 +8,7 @@ from openvino import inference_engine as ie
 from PIL import Image
 import six
 
-import camera_openvino as ko
+import kuberlab_openvino as ko
 from align import detect_face
 
 
@@ -158,8 +158,7 @@ def preprocess(inputs, ctx, **kwargs):
     if isinstance(image[0], (six.string_types, bytes)):
         image = Image.open(io.BytesIO(image[0]))
 
-        rgba_image = Image.fromarray(image)
-        image = rgba_image.convert('RGB')
+        image = image.convert('RGB')
         image = np.array(image)
 
     if image.shape[2] == 4:
@@ -179,7 +178,7 @@ def preprocess(inputs, ctx, **kwargs):
             frame = image_resize(image, width=width)
             scaled = (float(width) / image.shape[1], float(height) / image.shape[0])
     else:
-        if image.shape[0] > height or image.shape[1] > width:
+        if image.shape[0] != height or image.shape[1] != width:
             frame = cv2.resize(
                 image, (width, height), interpolation=cv2.INTER_AREA
             )
