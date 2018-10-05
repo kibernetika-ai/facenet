@@ -2,7 +2,6 @@ import logging
 import pickle
 
 import cv2
-import imageio
 import io
 import numpy as np
 from openvino import inference_engine as ie
@@ -125,7 +124,7 @@ def preprocess(inputs, ctx, **kwargs):
         raise RuntimeError('Missing "input" key in inputs. Provide an image in "input" key')
 
     if isinstance(image[0], (six.string_types, bytes)):
-        image = imageio.imread(image[0])
+        image = Image.open(io.BytesIO(image[0]))
 
         rgba_image = Image.fromarray(image)
         image = rgba_image.convert('RGB')
@@ -207,7 +206,10 @@ def postprocess(outputs, ctx, **kwargs):
         ko.add_overlays(ctx.frame, ctx.bounding_boxes, 0, labels=labels)
 
     image_bytes = io.BytesIO()
-    imageio.imsave(image_bytes, ctx.frame, '.png')
+
+    im = Image.fromarray(ctx.frame)
+    im.save(image_bytes, format='PNG')
+
     return {
         'output': image_bytes.getvalue(),
         'boxes': ctx.bounding_boxes,
