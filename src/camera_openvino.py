@@ -156,7 +156,7 @@ class PNetHandler(object):
     def proxy(self):
         def _exec(img):
             # Channel first
-            img = img.transpose([0, 3, 2, 1])
+            img = img.transpose([0, 3, 1, 2])
             output = self.exec_net.infer({self.input_name: img})
             output1 = output[self.output_name0]
             output2 = output[self.output_name1]

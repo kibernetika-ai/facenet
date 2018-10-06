@@ -8,7 +8,7 @@ from openvino import inference_engine as ie
 from PIL import Image
 import six
 
-import kuberlab_openvino as ko
+import camera_openvino as ko
 from align import detect_face
 
 

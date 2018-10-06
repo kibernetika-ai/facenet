@@ -154,7 +154,7 @@ def convert_pnet(dir, model_dir, h, w, data_type='FP32'):
     tf.reset_default_graph()
     with tf.Graph().as_default() as graph, tf.Session() as sess:
         logging.info("Load PNET graph")
-        data = tf.placeholder(tf.float32, (1, w, h, 3), 'input')
+        data = tf.placeholder(tf.float32, (1, h, w, 3), 'input')
         with tf.variable_scope('pnet'):
             pnet = df.PNetOpenVINO({'data': data})
             pnet.load(os.path.join(model_dir, 'det1.npy'), sess)
