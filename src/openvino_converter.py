@@ -335,12 +335,11 @@ def main():
 
             convert_facenet(args.training_dir, args.facenet_graph, data_type=data_type)
 
-    if args.do_push_model or args.do_push_dataset:
-        # Copy .npy files to model/dataset
-        dirname = args.align_model_dir
-        shutil.copy(os.path.join(dirname, 'det1.npy'), args.training_dir)
-        shutil.copy(os.path.join(dirname, 'det2.npy'), args.training_dir)
-        shutil.copy(os.path.join(dirname, 'det3.npy'), args.training_dir)
+    # Copy .npy files to model/dataset
+    dirname = args.align_model_dir
+    shutil.copy(os.path.join(dirname, 'det1.npy'), args.training_dir)
+    shutil.copy(os.path.join(dirname, 'det2.npy'), args.training_dir)
+    shutil.copy(os.path.join(dirname, 'det3.npy'), args.training_dir)
 
     if args.do_push_model:
         push_model(args.target, args.training_dir)

@@ -38,10 +38,18 @@ def override_task_arguments(task, params):
                 resource['args'] = {k: v}
 
 
+def boolean_string(s):
+    s = s.lower()
+    if s not in {'false', 'true'}:
+        raise ValueError('Not a valid boolean string')
+    return s == 'true'
+
+
 def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('upload_threshold')
     parser.add_argument('driver')
+    parser.add_argument('--convert', type=boolean_string, default=False)
 
     return parser
 
@@ -59,6 +67,14 @@ def main():
             'driver': args.driver,
         }
     }
+
+    if args.convert:
+        # Convert model before use it
+        run_tasks.insert(0, 'model-converter')
+    else:
+        # Use converted model
+        override_args['train-classifier']['$TRAINING_DIR/faces_160'] = '$MODEL_DIR/facenet.xml'
+        override_args['validate-classifier']['$TRAINING_DIR/faces_160'] = '$MODEL_DIR/facenet.xml'
 
     app = mlboard.apps.get()
 

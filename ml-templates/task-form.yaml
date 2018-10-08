@@ -8,3 +8,8 @@
   value: openvino
   label: Driver used for training facenet classifier
   width: 30
+- name: convert
+  type: boolean
+  value: false
+  label: Use model converter
+  width: 30

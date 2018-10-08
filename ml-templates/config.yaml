@@ -29,7 +29,7 @@ spec:
       workDir: $SRC_DIR
   - name: train-classifier
     resources:
-    - command: python3 classifier_train.py TRAIN $TRAINING_DIR/faces_160 $MODEL_DIR/facenet.xml $TRAINING_DIR/classifier.pkl --driver openvino --device CPU
+    - command: python3 classifier_train.py TRAIN $TRAINING_DIR/faces_160 $TRAINING_DIR/model/facenet.xml $TRAINING_DIR/classifier.pkl --driver openvino --device CPU
       default_volume_mapping: true
       images:
         cpu: kuberlab/serving:latest-openvino
@@ -47,7 +47,7 @@ spec:
       workDir: $SRC_DIR
   - name: validate-classifier
     resources:
-    - command: python3 classifier_train.py CLASSIFY $TRAINING_DIR/faces_160 $MODEL_DIR/facenet.xml $TRAINING_DIR/classifier.pkl --upload-model --upload-threshold 0.9 --driver openvino --device CPU
+    - command: python3 classifier_train.py CLASSIFY $TRAINING_DIR/faces_160 $TRAINING_DIR/model/facenet.xml $TRAINING_DIR/classifier.pkl --upload-model --upload-threshold 0.9 --driver openvino --device CPU
       default_volume_mapping: true
       images:
         cpu: kuberlab/serving:latest-openvino
@@ -65,7 +65,7 @@ spec:
       workDir: $SRC_DIR
   - name: pipeline
     resources:
-    - command: python pipeline.py
+    - command: python pipeline.py 0.9 openvino
       default_volume_mapping: true
       images:
         cpu: kuberlab/tensorflow:cpu-36-1.7.0-full
@@ -83,7 +83,7 @@ spec:
       workDir: $SRC_DIR
   - name: model-converter
     resources:
-    - command: python openvino_converter.py --all --training_dir /tmp --do_push_dataset --facenet_graph $MODEL_DIR/*.pb --target CPU --align_model_dir $MODEL_DIR
+    - command: python openvino_converter.py --all --training_dir $TRAINING_DIR/model --do_push_dataset --facenet_graph $MODEL_DIR/*.pb --target CPU --align_model_dir $MODEL_DIR
       default_volume_mapping: true
       images:
         cpu: kuberlab/openvino:cpu-36
