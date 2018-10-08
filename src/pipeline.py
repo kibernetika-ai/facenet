@@ -22,10 +22,10 @@ run_tasks = ['align-images', 'train-classifier', 'validate-classifier']
 
 def override_task_arguments(task, params):
     for k, v in params.items():
-        pattern = re.compile('{}[ =]([^\s]+|[\'"].*?[\'"])'.format(k))
+        pattern = re.compile('--{}[ =]([^\s]+|[\'"].*?[\'"])'.format(k))
         resource = task.config['resources'][0]
         task_cmd = resource['command']
-        replacement = '{} {}'.format(k, v)
+        replacement = '--{} {}'.format(k, v)
         if pattern.findall(task_cmd):
             # Replace
             resource['command'] = pattern.sub(
