@@ -9,6 +9,8 @@ import sys
 
 from mlboardclient.api import client
 
+import utils
+
 
 SUCCEEDED = 'Succeeded'
 
@@ -38,18 +40,12 @@ def override_task_arguments(task, params):
                 resource['args'] = {k: v}
 
 
-def boolean_string(s):
-    s = s.lower()
-    if s not in {'false', 'true'}:
-        raise ValueError('Not a valid boolean string')
-    return s == 'true'
-
-
 def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('upload_threshold')
     parser.add_argument('driver')
-    parser.add_argument('--convert', type=boolean_string, default=False)
+    parser.add_argument('--convert', type=utils.boolean_string, default=False)
+    parser.add_argument('--push-dataset', type=utils.boolean_string, default=False)
 
     return parser
 
@@ -71,6 +67,9 @@ def main():
     if args.convert:
         # Convert model before use it
         run_tasks.insert(0, 'model-converter')
+        override_args['model-converter'] = {
+            'push_dataset': str(args.push_dataset)
+        }
     else:
         # Use converted model
         override_args['train-classifier']['$TRAINING_DIR/faces_160'] = '$MODEL_DIR/facenet.xml'

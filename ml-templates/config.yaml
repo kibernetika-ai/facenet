@@ -83,7 +83,7 @@ spec:
       workDir: $SRC_DIR
   - name: model-converter
     resources:
-    - command: python openvino_converter.py --all --training_dir $TRAINING_DIR/model --do_push_dataset --facenet_graph $MODEL_DIR/*.pb --target CPU --align_model_dir $MODEL_DIR
+    - command: python openvino_converter.py --all --training_dir $TRAINING_DIR/model --push_dataset true --facenet_graph $MODEL_DIR/*.pb --target CPU --align_model_dir $MODEL_DIR
       default_volume_mapping: true
       images:
         cpu: kuberlab/openvino:cpu-36

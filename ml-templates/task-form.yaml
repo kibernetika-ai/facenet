@@ -12,4 +12,9 @@
   type: boolean
   value: false
   label: Use model converter
-  width: 30
+  width: 20
+- name: push_dataset
+  type: boolean
+  value: false
+  label: Push dataset during conversion
+  width: 20

@@ -9,6 +9,9 @@ import argparse
 import datetime
 
 
+import utils
+
+
 def submit(params):
     if os.environ.get('PROJECT_ID', None):
         from mlboardclient.api import client
@@ -258,13 +261,15 @@ def parse_args():
         help='Build FACENET'
     )
     parser.add_argument(
-        '--do_push_model',
-        action='store_true',
+        '--push_model',
+        type=utils.boolean_string,
+        default=False,
         help='Push model to catalog'
     )
     parser.add_argument(
-        '--do_push_dataset',
-        action='store_true',
+        '--push_dataset',
+        type=utils.boolean_string,
+        default=False,
         help='Push model to catalog'
     )
     parser.add_argument(
@@ -341,9 +346,9 @@ def main():
     shutil.copy(os.path.join(dirname, 'det2.npy'), args.training_dir)
     shutil.copy(os.path.join(dirname, 'det3.npy'), args.training_dir)
 
-    if args.do_push_model:
+    if args.push_model:
         push_model(args.target, args.training_dir)
-    if args.do_push_dataset:
+    if args.push_dataset:
         push_dataset(args.target, args.training_dir)
 
 
