@@ -157,7 +157,7 @@ def main(args):
         outputs = serving.predict(feed_dict)
         emb_array[start_index:end_index, :] = list(outputs.values())[0]
 
-    classifier_filename_exp = os.path.expanduser(args.classifier_filename)
+    classifier_filename_exp = os.path.expanduser(args.classifier)
 
     if args.mode == 'TRAIN':
         # Train classifier
