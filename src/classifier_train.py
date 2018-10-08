@@ -239,14 +239,16 @@ def parse_arguments(argv):
         help='Path to the data directory containing aligned LFW face patches.'
     )
     parser.add_argument(
-        'model',
+        '--model',
         type=str,
-        help='Path to .xml openVINO IR file'
+        help='Path to .xml openVINO IR file',
+        required=True,
     )
     parser.add_argument(
-        'classifier_filename',
+        '--classifier',
         help='Classifier model file name as a pickle (.pkl) file. ' +
-             'For training this is the output and for classification this is an input.'
+             'For training this is the output and for classification this is an input.',
+        required=True,
     )
     parser.add_argument(
         '--use_split_dataset',
