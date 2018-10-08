@@ -44,33 +44,33 @@ kuberlab-serving --driver openvino --model-path $DATA_DIR/facenet.xml --hooks se
 ```
 
 Explanation of execution command arguments:
- - **--driver** openvino - use OpenVINO serving driver (as we serve facenet model in OpenVINO format)
- - **--model-path** - model file location, in case of OpenVINO - **.xml** file location
- - **--hooks <hook.py>** - special Python script containing pre/postprocess inference hooks,
+* **--driver** openvino - use OpenVINO serving driver (as we serve facenet model in OpenVINO format)
+* **--model-path** - model file location, in case of OpenVINO - **.xml** file location
+* **--hooks <hook.py>** - special Python script containing pre/postprocess inference hooks,
 they needed for applying intermediate neural networks such as PNet and ONet
- - **-o classifier=<>** - Classifier file location
- - **-o flexible_batch_size=true** - use any batch size for OpenVINO driver
+* **-o classifier=<>** - Classifier file location
+* **-o flexible_batch_size=true** - use any batch size for OpenVINO driver
 (as we can see multiple faces on one picture)
- - **-o resolutions=<>** - Use specified resolutions for PNet network
- - **-o use_tf=true** - Use TensorFlow-based PNet/ONet networks (they are more
+* **-o resolutions=<>** - Use specified resolutions for PNet network
+* **-o use_tf=true** - Use TensorFlow-based PNet/ONet networks (they are more
 flexible and are working with any resolutions)
- - **-o tf_path=<>** - Load TensoFlow-based model weights from specified location.
+* **-o tf_path=<>** - Load TensoFlow-based model weights from specified location.
 
 Next, specify requests and limits (at least 1-2 CPUs), image (CPU) -
 `kuberlab/serving:latest-openvino` and **TCP** port 9000.
 
 Then, need to add facenet model and source code volumes:
- - Add this git repository as **src** with *subPath* **facenet/src**
- - Add **facenet-pretrained** dataset with newly created version (named
+* Add this git repository as **src** with *subPath* **facenet/src**
+* Add **facenet-pretrained** dataset with newly created version (named
  like **1.0.0-CPU-XXXXX**), it must include **facenet.xml**, **det{1-3}.npy** files,
  **pnet_*.xml** files and **onet.xml** file
 
 Then, specify serving parameters for data input and output for the UI:
- - output filter - **output**
- - model - **any** (this value doesn't matter)
- - out mime type - **image/png**
- - click on checkbox **raw input**
+* output filter - **output**
+* model - **any** (this value doesn't matter)
+* out mime type - **image/png**
+* click on checkbox **raw input**
 
 Specify input params:
- - name **input**, type **bytes**
+* name **input**, type **bytes**
 
