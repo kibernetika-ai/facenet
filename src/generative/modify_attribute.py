@@ -78,7 +78,12 @@ def main(args):
         # Start running operations on the Graph
         gpu_memory_fraction = 1.0
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_memory_fraction)
-        sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
+        sess = tf.Session(
+            config=tf.ConfigProto(
+                gpu_options=gpu_options,
+                log_device_placement=False
+            )
+        )
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
         coord = tf.train.Coordinator()
@@ -102,19 +107,23 @@ def main(args):
             image_indices = [8, 11, 13, 18, 19, 26, 31, 39, 47, 54, 56, 57, 58, 59, 60, 73]
             nrof_images = len(image_indices)
             nrof_interp_steps = 10
-            sweep_latent_var = np.zeros((nrof_interp_steps * nrof_images, args.latent_var_size), np.float32)
+            sweep_latent_var = np.zeros(
+                (nrof_interp_steps * nrof_images, args.latent_var_size), np.float32
+            )
             for j in range(nrof_images):
                 image_index = image_indices[j]
                 idx = np.argwhere(attributes[:, attribute_index] == -1)[image_index, 0]
                 for i in range(nrof_interp_steps):
-                    sweep_latent_var[i + nrof_interp_steps * j, :] = latent_vars[idx,
-                                                                     :] + 5.0 * i / nrof_interp_steps * attribute_vectors[
-                                                                                                        attribute_index,
-                                                                                                        :]
+                    sweep_latent_var[i + nrof_interp_steps * j, :] = (
+                        latent_vars[idx, :] + 5.0 * i /
+                        nrof_interp_steps * attribute_vectors[attribute_index, :]
+                    )
 
             recon = sess.run(reconstructed, feed_dict={latent_var: sweep_latent_var})
 
-            img = facenet.put_images_on_grid(recon, shape=(nrof_interp_steps * 2, int(math.ceil(nrof_images / 2))))
+            img = facenet.put_images_on_grid(
+                recon, shape=(nrof_interp_steps * 2, int(math.ceil(nrof_images / 2)))
+            )
 
             image_filename = os.path.expanduser(args.output_image_filename)
             print('Writing generated image to %s' % image_filename)
