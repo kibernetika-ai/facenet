@@ -335,11 +335,13 @@ def get_dataset(path, has_class_directories=True):
     return dataset
 
 
-def get_image_paths(facedir):
+def get_image_paths(facedir, limit=None):
     image_paths = []
     if os.path.isdir(facedir):
         images = os.listdir(facedir)
-        image_paths = [os.path.join(facedir,img) for img in images]
+        image_paths = [os.path.join(facedir, img) for img in images]
+    if limit:
+        return image_paths[:limit]
     return image_paths
   
 def split_dataset(dataset, split_ratio, min_nrof_images_per_class, mode):
