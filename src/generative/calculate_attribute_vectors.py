@@ -158,7 +158,6 @@ def main(args):
                 'fields': fields,
                 'attribute_vectors': attribute_vectors
             }
-            __import__('ipdb').set_trace()
             with h5py.File(filename, 'w') as f:
                 for key, value in mdict.items():
                     f.create_dataset(key, data=value)
