@@ -51,9 +51,11 @@ def update_data(data, use_mlboard, mlboard):
     if use_mlboard and mlboard:
         mlboard.update_task_info(data)
 
-def catalog_ref(name,ctype,version):
+
+def catalog_ref(name, ctype, version):
     return '#/{}/catalog/{}/{}/versions/{}'. \
-        format(os.environ.get('WORKSPACE_NAME'),ctype,name,version)
+        format(os.environ.get('WORKSPACE_NAME'), ctype, name, version)
+
 
 def upload_model(use_mlboard, mlboard, classifier_path, model, version):
     if not use_mlboard or not mlboard:
@@ -63,21 +65,24 @@ def upload_model(use_mlboard, mlboard, classifier_path, model, version):
     dirname = '/tmp/classifier'
     os.makedirs(dirname)
     shutil.copy(classifier_path, path.join(dirname, path.basename(classifier_path)))
-    #shutil.shutil.copy()
+    # shutil.shutil.copy()
     mlboard.model_upload(model, version, dirname)
 
     shutil.rmtree(dirname)
-    update_data({'model_reference': catalog_ref(model,'mlmodel',version)}, use_mlboard, mlboard)
+    update_data({'model_reference': catalog_ref(model, 'mlmodel', version)}, use_mlboard, mlboard)
     print("New model uploaded as '%s', version '%s'." % (model, version))
 
-def confusion(y_test,y_score,labels):
+
+def confusion(y_test, y_score, labels):
     from sklearn.metrics import confusion_matrix
     import itertools
     import matplotlib.pyplot as plt
+    import io
+    import base64
     def _plot_confusion_matrix(cm, classes,
-                          normalize=False,
-                          title='Confusion matrix',
-                          cmap=plt.cm.Blues):
+                               normalize=False,
+                               title='Confusion matrix',
+                               cmap=plt.cm.Blues):
         if normalize:
             cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
             print("Normalized confusion matrix")
@@ -97,15 +102,20 @@ def confusion(y_test,y_score,labels):
         thresh = cm.max() / 2.
         for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
             plt.text(j, i, format(cm[i, j], fmt),
-                 horizontalalignment="center",
-                 color="white" if cm[i, j] > thresh else "black")
+                     horizontalalignment="center",
+                     color="white" if cm[i, j] > thresh else "black")
 
         plt.tight_layout()
         plt.ylabel('True label')
         plt.xlabel('Predicted label')
-        plt.savefig('/notebooks/test.png')
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        return '<html><img src="data:image/png;base64,{}"/></html>'.format(base64.b64encode(buf.getvalue()).decode())
+
     cm = confusion_matrix(y_test, y_score)
-    _plot_confusion_matrix(cm,labels)
+    return _plot_confusion_matrix(cm, labels)
+
 
 def main(args):
     use_mlboard = False
@@ -228,9 +238,9 @@ def main(args):
 
         accuracy = np.mean(np.equal(best_class_indices, labels))
 
-        update_data({'accuracy': accuracy}, use_mlboard, mlboard)
+        rpt = confusion(labels, best_class_indices, class_names)
+        update_data({'accuracy': accuracy,'#documents.confusion_matrix.html':rpt}, use_mlboard, mlboard)
         print('Accuracy: %.3f' % accuracy)
-        confusion(labels,best_class_indices,class_names)
         if args.upload_model and accuracy >= args.upload_threshold:
             timestamp = datetime.datetime.now().strftime('%s')
             model_name = 'facenet-classifier'
