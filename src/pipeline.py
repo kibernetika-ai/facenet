@@ -77,8 +77,17 @@ def main():
 
     app = mlboard.apps.get()
 
+    faces_set = None
     for task in run_tasks:
         t = app.tasks.get(task)
+        if faces_set is not None:
+            revs = t.config.get('datasetRevisions',[])
+            _revs = []
+            for r in revs:
+                if r['volumeName'] != 'faces':
+                    _revs.append(r)
+            _revs.append({'revision': faces_set,'volumeName': 'faces'})
+            t.config['datasetRevisions'] = _revs
         if t.name in override_args and override_args[t.name]:
             override_task_arguments(t, override_args[t.name])
 
@@ -107,7 +116,8 @@ def main():
             "Task %s-%s completed with status %s."
             % (completed.name, completed.build, completed.status)
         )
-
+        if task=='align-images':
+            faces_set = '1.{}.0'.format(completed.build)
     LOG.info("Workflow completed with status SUCCESS")
 
 
