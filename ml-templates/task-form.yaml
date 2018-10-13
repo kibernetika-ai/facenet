@@ -1,10 +1,12 @@
 - name: upload_threshold
+  label: Upload classifier accuracy threshold
   type: float
   value: 0.9
-  label: Upload classifier accuracy threshold
-  width: 30
+  width: 50
 - name: driver
-  type: string
+  type: select
   value: openvino
-  label: Driver used for training facenet classifier
-  width: 30
+  width: 50
+  options:
+    - openvino
+    - tf
