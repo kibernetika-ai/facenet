@@ -149,6 +149,21 @@ def main(args):
 
     print('Total number of images: %d' % nrof_images_total)
     print('Number of successfully aligned images: %d' % nrof_successfully_aligned)
+    if args.push is not None:
+        build_id = os.environ.get('BUILD_ID', None)
+        if os.environ.get('PROJECT_ID', None) and (build_id is not None):
+            from mlboardclient.api import client
+            mlboard = client.Client()
+            version = '1.{}.0'.format(build_id)
+            mlboard.datasets.push(
+                os.environ.get('WORKSPACE_NAME'),
+                args.push,
+                '1.{}.0'.format(build_id),
+                output_dir,
+                create=True
+            )
+            ref = '#/{}/catalog/dataset/{}/versions/{}'.format(os.environ.get('WORKSPACE_NAME'),args.push, version)
+            client.update_task_info({'dataset': ref})
 
 
 def parse_arguments(argv):
@@ -169,6 +184,8 @@ def parse_arguments(argv):
                         help='Upper bound on the amount of GPU memory that will be used by the process.', default=1.0)
     parser.add_argument('--detect_multiple_faces', type=bool,
                         help='Detect and align multiple faces per image.', default=True)
+    parser.add_argument('--push',type=str, default=None,
+                        help='Push data to catalog')
     return parser.parse_args(argv)
 
 
