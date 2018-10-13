@@ -70,6 +70,42 @@ def upload_model(use_mlboard, mlboard, classifier_path, model, version):
     update_data({'model_reference': catalog_ref(model,'mlmodel',version)}, use_mlboard, mlboard)
     print("New model uploaded as '%s', version '%s'." % (model, version))
 
+def confusion(y_test,y_score,labels):
+    from sklearn.metrics import confusion_matrix
+    import itertools
+    import matplotlib.pyplot as plt
+    def _plot_confusion_matrix(cm, classes,
+                          normalize=False,
+                          title='Confusion matrix',
+                          cmap=plt.cm.Blues):
+        if normalize:
+            cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+            print("Normalized confusion matrix")
+        else:
+            print('Confusion matrix, without normalization')
+
+        print(cm)
+
+        plt.imshow(cm, interpolation='nearest', cmap=cmap)
+        plt.title(title)
+        plt.colorbar()
+        tick_marks = np.arange(len(classes))
+        plt.xticks(tick_marks, classes, rotation=45)
+        plt.yticks(tick_marks, classes)
+
+        fmt = '.2f' if normalize else 'd'
+        thresh = cm.max() / 2.
+        for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+            plt.text(j, i, format(cm[i, j], fmt),
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
+
+        plt.tight_layout()
+        plt.ylabel('True label')
+        plt.xlabel('Predicted label')
+        plt.savefig('/notebooks/test.png')
+    cm = confusion_matrix(y_test, y_score)
+    _plot_confusion_matrix(cm,labels)
 
 def main(args):
     use_mlboard = False
@@ -191,9 +227,10 @@ def main(args):
             print('%4d  %s: %.3f' % (i, class_names[best_class_indices[i]], best_class_probabilities[i]))
 
         accuracy = np.mean(np.equal(best_class_indices, labels))
+
         update_data({'accuracy': accuracy}, use_mlboard, mlboard)
         print('Accuracy: %.3f' % accuracy)
-
+        confusion(labels,best_class_indices,class_names)
         if args.upload_model and accuracy >= args.upload_threshold:
             timestamp = datetime.datetime.now().strftime('%s')
             model_name = 'facenet-classifier'
