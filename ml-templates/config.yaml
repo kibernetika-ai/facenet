@@ -138,7 +138,7 @@ spec:
     name: model
     model:
       workspace: {{ .model.workspace }}
-      dataset: {{ .model.value }}
+      model: {{ .model.value }}
       version: {{ .model.version }}
   - isLibDir: false
     name: faces
