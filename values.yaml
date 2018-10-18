@@ -16,11 +16,11 @@ src:
 
 model:
  value: 'facenet-pretrained'
- version: '1.0.1-CPU'
+ version: '1.0.1'
  workspace: 'kuberlab-demo'
  wizard:
    name: "Pre trained model catalog"
-   kind: dataset
+   kind: model
 
 faces:
  value: 'faces'

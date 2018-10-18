@@ -45,7 +45,7 @@ def get_parser():
     parser.add_argument('upload_threshold')
     parser.add_argument('driver')
     parser.add_argument('--convert', type=utils.boolean_string, default=False)
-    parser.add_argument('--push-dataset', type=utils.boolean_string, default=False)
+    parser.add_argument('--push-model', type=utils.boolean_string, default=False)
 
     return parser
 
@@ -68,7 +68,7 @@ def main():
         # Convert model before use it
         run_tasks.insert(0, 'model-converter')
         override_args['model-converter'] = {
-            'push_dataset': str(args.push_dataset)
+            'push_model': str(args.push_model)
         }
     else:
         # Use converted model
