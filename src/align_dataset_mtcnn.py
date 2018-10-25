@@ -35,7 +35,7 @@ import facenet
 import align.detect_face
 import random
 from time import sleep
-
+import datetime
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -154,16 +154,17 @@ def main(args):
         if os.environ.get('PROJECT_ID', None) and (build_id is not None):
             from mlboardclient.api import client
             mlboard = client.Client()
-            version = '1.{}.0'.format(build_id)
+            timestamp = datetime.datetime.now().strftime('%s')
+            version = '1.{}.0-{}'.format(build_id,timestamp)
             mlboard.datasets.push(
                 os.environ.get('WORKSPACE_NAME'),
                 args.push,
-                '1.{}.0'.format(build_id),
+                version,
                 output_dir,
                 create=True
             )
             ref = '#/{}/catalog/dataset/{}/versions/{}'.format(os.environ.get('WORKSPACE_NAME'),args.push, version)
-            client.update_task_info({'dataset': ref})
+            client.update_task_info({'dataset': ref},{'push_version':version})
 
 
 def parse_arguments(argv):
