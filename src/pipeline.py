@@ -72,8 +72,8 @@ def main():
         }
     else:
         # Use converted model
-        override_args['train-classifier']['model'] = '$MODEL_DIR/facenet.xml'
-        override_args['validate-classifier']['model'] = '$MODEL_DIR/facenet.xml'
+        override_args['train-classifier']['model'] = '$FACENET_DIR/facenet.xml'
+        override_args['validate-classifier']['model'] = '$FACENET_DIR/facenet.xml'
 
     app = mlboard.apps.get()
 
