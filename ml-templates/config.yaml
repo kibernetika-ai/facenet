@@ -142,6 +142,7 @@ spec:
       outFilter:
         - output
       outMimeType: "image/png"
+    workDir: $SRC_DIR
     ports:
     - port: 9000
       targetPort: 9000
