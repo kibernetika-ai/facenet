@@ -11,7 +11,7 @@ spec:
   - name: align-images
     resources:
     - command: python align_dataset_mtcnn.py
-        $FACES_DIR /tmp/faces --image_size 160  --margin 32 --model_dir $MODEL_DIR --push {{ .faces.value }}
+        $FACES_DIR /tmp/faces --image_size 160  --margin 32 --model_dir $FACENET_DIR --push {{ .faces.value }}
       default_volume_mapping: true
       images:
         cpu: kuberlab/tensorflow:cpu-36-1.7.0-full
@@ -29,7 +29,7 @@ spec:
       workDir: $SRC_DIR
   - name: train-classifier
     resources:
-    - command: python3 classifier_train.py TRAIN $FACES_DIR --model $MODEL_DIR/facenet.xml --classifier $TRAINING_DIR/classifier.pkl --driver openvino --device CPU
+    - command: python3 classifier_train.py TRAIN $FACES_DIR --model $FACENET_DIR/facenet.xml --classifier $TRAINING_DIR/classifier.pkl --driver openvino --device CPU
       default_volume_mapping: true
       images:
         cpu: kuberlab/serving:latest-openvino
@@ -47,7 +47,7 @@ spec:
       workDir: $SRC_DIR
   - name: validate-classifier
     resources:
-    - command: python3 classifier_train.py CLASSIFY $FACES_DIR --model $MODEL_DIR/facenet.xml --classifier $TRAINING_DIR/classifier.pkl --upload-model --upload-threshold 0.9 --driver openvino --device CPU
+    - command: python3 classifier_train.py CLASSIFY $FACES_DIR --model $FACENET_DIR/facenet.xml --classifier $TRAINING_DIR/classifier.pkl --upload-model --upload-threshold 0.9 --driver openvino --device CPU
       default_volume_mapping: true
       images:
         cpu: kuberlab/serving:latest-openvino
@@ -83,7 +83,7 @@ spec:
       workDir: $SRC_DIR
   - name: model-converter
     resources:
-    - command: python openvino_converter.py --all --training_dir $TRAINING_DIR/model --push_model true --facenet_graph $MODEL_DIR/*.pb --target CPU --align_model_dir $MODEL_DIR
+    - command: python openvino_converter.py --all --training_dir $TRAINING_DIR/model --push_model true --facenet_graph $FACENET_DIR/*.pb --target CPU --align_model_dir $$FACENET_DIR
       default_volume_mapping: true
       images:
         cpu: kuberlab/openvino:cpu-36
@@ -117,6 +117,40 @@ spec:
       requests:
         cpu: 100m
         memory: 64Mi
+
+  serving:
+  - name: serving
+    displayName: OpenVino Serving
+    images:
+      cpu: "kuberlab/serving:latest-openvino"
+    command: "kuberlab-serving --driver openvino --model-path $FACENET_DIR/facenet.xml --hooks serving_hook.py -o classifier=$TRAINING_DIR/classifier.pkl -o flexible_batch_size=True -o resolutions=14x19,19x27,26x37,37x52,52x74,73x104,103x146,145x206,205x290 -o use_tf=true -o tf_path=$FACENET_DIR"
+    resources:
+      accelerators:
+        gpu: 0
+      requests:
+        cpu: 100m
+        memory: 125Mi
+      limits:
+        cpu: 2000m
+        memory: 1Gi
+    spec:
+      params:
+      - name: input
+        type: bytes
+      rawInput: true
+      model: any
+      outFilter:
+        - output
+      outMimeType: "image/png"
+    ports:
+    - port: 9000
+      targetPort: 9000
+      protocol: TCP
+      name: http
+    volumes:
+    - name: training
+    - name: src
+    - name: facenet
   volumes:
   - clusterStorage: '{{ .storage.value }}'
     name: training
@@ -135,7 +169,7 @@ spec:
     name: code
     subPath: code
   - isLibDir: false
-    name: model
+    name: facenet
     model:
       workspace: {{ .model.workspace }}
       model: {{ .model.value }}
