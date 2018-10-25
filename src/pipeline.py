@@ -118,7 +118,7 @@ def main():
         )
         if task=='align-images':
             faces_set = completed.exec_info['push_version']
-            LOG.info('Setup new faceset: {}',faces_set)
+            LOG.info('Setup new faceset: {}'.format(faces_set))
     LOG.info("Workflow completed with status SUCCESS")
 
 
