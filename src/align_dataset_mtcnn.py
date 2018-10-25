@@ -164,7 +164,7 @@ def main(args):
                 create=True
             )
             ref = '#/{}/catalog/dataset/{}/versions/{}'.format(os.environ.get('WORKSPACE_NAME'),args.push, version)
-            client.update_task_info({'dataset': ref},{'push_version':version})
+            client.update_task_info({'dataset': ref,'push_version':version})
 
 
 def parse_arguments(argv):
