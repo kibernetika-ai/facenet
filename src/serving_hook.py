@@ -254,8 +254,9 @@ def postprocess(outputs, ctx, **kwargs):
     im = Image.fromarray(ctx.frame)
     im.save(image_bytes, format='PNG')
 
+    text_labels = [l['label'] for l in labels]
     return {
         'output': image_bytes.getvalue(),
         'boxes': ctx.bounding_boxes,
-        # 'labels': np.array(labels)
+        'labels': np.array(text_labels, dtype=np.string_)
     }
