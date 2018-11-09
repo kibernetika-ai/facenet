@@ -1,8 +1,9 @@
 import argparse
 import base64
+import grpc
 import io
 import itertools
-import grpc
+from os import path
 import time
 
 import imageio
@@ -12,7 +13,8 @@ from ml_serving import predict_pb2_grpc
 from ml_serving.utils import tensor_util
 import numpy as np
 import scipy
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import auc
+from sklearn.metrics import roc_curve
 
 import classifier_train
 import facenet
@@ -38,6 +40,13 @@ def parse_arguments():
         help='Serving port number',
         metavar='<int>',
         default=9000,
+    )
+    parser.add_argument(
+        '--output-dir',
+        type=str,
+        help='Output directory for reports',
+        metavar='<dir>',
+        default='.',
     )
     return parser.parse_args()
 
@@ -109,7 +118,9 @@ def plot_roc(classes, y_score, y_test, num_class, name):
                    ''.format(roc_auc["macro"]),
              color='navy', linestyle=':', linewidth=4)
 
-    colors = itertools.cycle(['aqua', 'darkorange', 'cornflowerblue', 'darkgreen'])
+    colors = itertools.cycle(
+        ['aqua', 'darkorange', 'cornflowerblue', 'darkgreen']
+    )
     for i, color in zip(range(num_class), colors):
         plt.plot(fpr[i], tpr[i], color=color, lw=lw,
                  label='ROC curve of class {0} (area = {1:0.2f})'
@@ -157,12 +168,12 @@ if __name__ == '__main__':
     time_requests = 0.0
     time_all_faces = 0.0
 
-    for i, path in enumerate(paths):
+    for i, image_path in enumerate(paths):
         true_label = labels[i]
-        print('Processing {}...'.format(path))
+        print('Processing {}...'.format(image_path))
 
         t = time.time()
-        predicted = predict(path, stub)
+        predicted = predict(image_path, stub)
 
         delta = (time.time() - t) * 1000
         time_requests += delta
@@ -173,18 +184,30 @@ if __name__ == '__main__':
     indices = [class_names.index(p) for p in predicted_labels]
 
     print()
-    print('Average time per request: %.3fms' % (time_requests / float(len(paths))))
-    print('Average time per face: %.3fms' % (time_requests / float(len(true_labels))))
+    print(
+        'Average time per request: %.3fms'
+        % (time_requests / float(len(paths)))
+    )
+    print(
+        'Average time per face: %.3fms'
+        % (time_requests / float(len(true_labels)))
+    )
     print('Computing confusion matrix...')
     rpt = classifier_train.confusion(true_labels, indices, class_names)
 
     print('Saving confusion matrix...')
-    with open('confusion_matrix.html', 'w') as f:
+    with open(path.join(args.output_dir, 'confusion_matrix.html'), 'w') as f:
         f.write(rpt)
 
     print('Computing ROC curve...')
-    thr, rpt = plot_roc(class_names, np.array(indices), np.array(true_labels), len(class_names), 'Face recognition')
-    with open('roc_curve.html', 'w') as f:
+    thr, rpt = plot_roc(
+        class_names,
+        np.array(indices),
+        np.array(true_labels),
+        len(class_names),
+        'Face recognition'
+    )
+    with open(path.join(args.output_dir, 'roc_curve.html'), 'w') as f:
         f.write(rpt)
 
     print('Done.')
