@@ -20,6 +20,12 @@ import classifier_train
 import facenet
 
 
+try:
+    from mlboardclient.api import client
+except ImportError:
+    client = None
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -145,7 +151,33 @@ def plot_roc(classes, y_score, y_test, num_class, name):
     return thr, plot_data
 
 
+def update_data(data, use_mlboard, mlboard):
+    if use_mlboard and mlboard:
+        mlboard.update_task_info(data)
+
+
+def upload_reports(mlboard, use_mlboard, conf_matrix, roc):
+    data = {
+        '#documents.confusion_matrix.html': conf_matrix,
+        '#documents.roc_curves.html': roc,
+    }
+    update_data(data, use_mlboard, mlboard)
+
+
 if __name__ == '__main__':
+    use_mlboard = False
+    mlboard = None
+    if client:
+        mlboard = client.Client()
+        try:
+            mlboard.apps.get()
+        except Exception:
+            mlboard = None
+            print('Do not use mlboard.')
+        else:
+            print('Use mlboard parameters logging.')
+            use_mlboard = True
+
     args = parse_arguments()
     dataset = facenet.get_dataset(args.data_dir)
 
@@ -193,14 +225,14 @@ if __name__ == '__main__':
         % (time_requests / float(len(true_labels)))
     )
     print('Computing confusion matrix...')
-    rpt = classifier_train.confusion(true_labels, indices, class_names)
+    conf_matrix = classifier_train.confusion(true_labels, indices, class_names)
 
     print('Saving confusion matrix...')
     with open(path.join(args.output_dir, 'confusion_matrix.html'), 'w') as f:
-        f.write(rpt)
+        f.write(conf_matrix)
 
     print('Computing ROC curve...')
-    thr, rpt = plot_roc(
+    thr, roc = plot_roc(
         class_names,
         np.array(indices),
         np.array(true_labels),
@@ -208,6 +240,7 @@ if __name__ == '__main__':
         'Face recognition'
     )
     with open(path.join(args.output_dir, 'roc_curve.html'), 'w') as f:
-        f.write(rpt)
+        f.write(roc)
 
+    upload_reports(mlboard, use_mlboard, conf_matrix, roc)
     print('Done.')
