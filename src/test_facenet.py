@@ -3,13 +3,13 @@ import base64
 import grpc
 import io
 import itertools
+import os
 from os import path
 import time
 
 import matplotlib.pyplot as plt
-from ml_serving import predict_pb2
-from ml_serving import predict_pb2_grpc
-from ml_serving.utils import tensor_util
+from mlboardclient.api import client
+from mlboardclient import api
 import numpy as np
 from PIL import Image
 import scipy
@@ -19,11 +19,14 @@ from sklearn.metrics import roc_curve
 import classifier_train
 import facenet
 
-
 try:
-    from mlboardclient.api import client
+    from ml_serving import predict_pb2
+    from ml_serving import predict_pb2_grpc
+    from ml_serving.utils import tensor_util
 except ImportError:
-    client = None
+    predict_pb2 = None
+    predict_pb2_grpc = None
+    tensor_util = None
 
 
 def parse_arguments():
@@ -39,6 +42,18 @@ def parse_arguments():
         help='Serving host address',
         metavar='<host>',
         default='localhost',
+    )
+    parser.add_argument(
+        '--mlboard-url',
+        type=str,
+        help='ML-board address',
+        metavar='<http://host:port/api/v2>',
+        default=None,
+    )
+    parser.add_argument(
+        '--use-grpc',
+        action='store_true',
+        help='Use grpc protocol for connection',
     )
     parser.add_argument(
         '--port',
@@ -57,12 +72,52 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def predict(image_path, stub):
-    test = np.array(Image.open(image_path))
-    
-    tensor_proto = tensor_util.make_tensor_proto(test)
+def predict_http(data, client, serv_addr):
+    inputs = {
+        "inputs": {
+            "input": {"dtype": api.DT_UINT8, "data": data.tolist()}
+        }
+    }
+
+    response = client.servings.call(
+        None,
+        'any',
+        inputs,
+        serving_address=serv_addr,
+    )
+
+    js = response.json()
+    raw_labels = js['labels']
+    labels = []
+    for l in raw_labels:
+        l = base64.b64decode(l.encode()).decode()
+        text_label = l[l.find(' ') + 1:]
+        labels.append(text_label)
+
+    return labels
+
+
+stub = None
+
+
+def get_stub(addr):
+    global stub
+    if stub is not None:
+        return stub
+
+    port = 9000
+    server = '%s:%s' % (addr, port)
+    channel = grpc.insecure_channel(server)
+
+    stub = predict_pb2_grpc.PredictServiceStub(channel)
+    return stub
+
+
+def predict_grpc(data, client, serv_addr):
+    tensor_proto = tensor_util.make_tensor_proto(data)
     inputs = {'input': tensor_proto}
 
+    stub = get_stub(serv_addr)
     response = stub.Predict(predict_pb2.PredictRequest(inputs=inputs))
 
     raw_labels = tensor_util.make_ndarray(response.outputs['labels'])
@@ -73,6 +128,15 @@ def predict(image_path, stub):
         labels.append(text_label)
 
     return labels
+
+
+def predict(image_path, client, serv_addr, use_grpc):
+    test = np.array(Image.open(image_path).convert('RGB'))
+
+    if use_grpc:
+        return predict_grpc(test, client, serv_addr)
+    else:
+        return predict_http(test, client, serv_addr)
 
 
 def plot_roc(classes, y_score, y_test, num_class, name):
@@ -152,34 +216,30 @@ def plot_roc(classes, y_score, y_test, num_class, name):
     return thr, plot_data
 
 
-def update_data(data, use_mlboard, mlboard):
-    if use_mlboard and mlboard:
+def inside_task():
+    return os.environ.get('TASK_NAME') and os.environ.get('BUILD_ID')
+
+
+def update_data(data, mlboard):
+    if mlboard:
         mlboard.update_task_info(data)
 
 
-def upload_reports(mlboard, use_mlboard, conf_matrix, roc):
+def upload_reports(mlboard, conf_matrix, roc):
+    if not inside_task():
+        return
+
     data = {
         '#documents.confusion_matrix.html': conf_matrix,
         '#documents.roc_curves.html': roc,
     }
-    update_data(data, use_mlboard, mlboard)
+    update_data(data, mlboard)
 
 
 if __name__ == '__main__':
-    use_mlboard = False
-    mlboard = None
-    if client:
-        mlboard = client.Client()
-        try:
-            mlboard.apps.get()
-        except Exception:
-            mlboard = None
-            print('Do not use mlboard.')
-        else:
-            print('Use mlboard parameters logging.')
-            use_mlboard = True
-
     args = parse_arguments()
+
+    mlboard = client.Client(args.mlboard_url)
     dataset = facenet.get_dataset(args.data_dir)
 
     paths, labels = facenet.get_image_paths_and_labels(dataset)
@@ -191,22 +251,19 @@ if __name__ == '__main__':
     print('Calculating features for images')
     nrof_images = len(paths)
 
-    server = '%s:%s' % (args.host, args.port)
-    channel = grpc.insecure_channel(server)
-
-    stub = predict_pb2_grpc.PredictServiceStub(channel)
-
     true_labels = []
     predicted_labels = []
     time_requests = 0.0
     time_all_faces = 0.0
 
+    ml_serving_available = predict_pb2_grpc and predict_pb2 and tensor_util
+    use_grpc = args.use_grpc and ml_serving_available
     for i, image_path in enumerate(paths):
         true_label = labels[i]
         print('Processing {}...'.format(image_path))
 
         t = time.time()
-        predicted = predict(image_path, stub)
+        predicted = predict(image_path, mlboard, args.host, use_grpc)
 
         delta = (time.time() - t) * 1000
         time_requests += delta
@@ -243,5 +300,5 @@ if __name__ == '__main__':
     with open(path.join(args.output_dir, 'roc_curve.html'), 'w') as f:
         f.write(roc)
 
-    upload_reports(mlboard, use_mlboard, conf_matrix, roc)
+    upload_reports(mlboard, conf_matrix, roc)
     print('Done.')
