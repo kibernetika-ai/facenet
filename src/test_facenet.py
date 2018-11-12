@@ -72,13 +72,18 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def predict_http(data, client, serv_addr):
+def predict_http(image_path, client, serv_addr):
+    with open(image_path, 'rb') as f:
+        content = f.read()
+
+    # Do not send shaped tensor because python
+    # have big compute overhead for further serialization to list and JSON
+    # Send raw bytes.
     inputs = {
         "inputs": {
-            "input": {"dtype": api.DT_UINT8, "data": data.tolist()}
+            "input": {"dtype": api.DT_STRING, "data": content}
         }
     }
-
     response = client.servings.call(
         None,
         'any',
@@ -131,12 +136,11 @@ def predict_grpc(data, client, serv_addr):
 
 
 def predict(image_path, client, serv_addr, use_grpc):
-    test = np.array(Image.open(image_path).convert('RGB'))
-
     if use_grpc:
+        test = np.array(Image.open(image_path).convert('RGB'))
         return predict_grpc(test, client, serv_addr)
     else:
-        return predict_http(test, client, serv_addr)
+        return predict_http(image_path, client, serv_addr)
 
 
 def plot_roc(classes, y_score, y_test, num_class, name):

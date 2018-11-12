@@ -155,6 +155,9 @@ def preprocess(inputs, ctx, **kwargs):
     if image is None:
         raise RuntimeError('Missing "input" key in inputs. Provide an image in "input" key')
 
+    if len(image.shape) == 0:
+        image = [image.tolist()]
+
     if isinstance(image[0], (six.string_types, bytes)):
         image = Image.open(io.BytesIO(image[0]))
 
