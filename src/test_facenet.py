@@ -6,12 +6,12 @@ import itertools
 from os import path
 import time
 
-import imageio
 import matplotlib.pyplot as plt
 from ml_serving import predict_pb2
 from ml_serving import predict_pb2_grpc
 from ml_serving.utils import tensor_util
 import numpy as np
+from PIL import Image
 import scipy
 from sklearn.metrics import auc
 from sklearn.metrics import roc_curve
@@ -58,7 +58,8 @@ def parse_arguments():
 
 
 def predict(image_path, stub):
-    test = imageio.imread(image_path)
+    test = np.array(Image.open(image_path))
+    
     tensor_proto = tensor_util.make_tensor_proto(test)
     inputs = {'input': tensor_proto}
 
