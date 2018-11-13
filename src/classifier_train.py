@@ -174,20 +174,47 @@ def main(args):
         inputs='input:0,phase_train:0',
         outputs='embeddings:0',
         device=args.device,
+        flexible_batch_size=True,
     )
 
     # Run forward pass to calculate embeddings
     print('Calculating features for images')
     nrof_images = len(paths)
     nrof_batches_per_epoch = int(math.ceil(1.0 * nrof_images / args.batch_size))
-    emb_array = np.zeros((nrof_images, 512))
+    embeddings_size = nrof_images
+    if args.noise:
+        embeddings_size += nrof_images * args.noise_count
+
+    emb_array = np.zeros((embeddings_size, 512))
     for i in range(nrof_batches_per_epoch):
         start_index = i * args.batch_size
         end_index = min((i + 1) * args.batch_size, nrof_images)
         paths_batch = paths[start_index:end_index]
+
+        if args.noise:
+            start_index += i * args.noise_count
+            end_index += i * args.noise_count
+
         for j in range(end_index - start_index):
             print('Batch {} <-> {}'.format(paths_batch[j], labels[start_index + j]))
         images = facenet.load_data(paths_batch, False, False, args.image_size)
+
+        if args.noise:
+            for k, img in enumerate(images):
+                for i in range(args.noise_count):
+
+                    print(
+                        'Applying noise for image {}, #{}'.format(
+                            paths_batch[k], i + 1
+                        )
+                    )
+                    noised = facenet.random_noise(img)
+
+                    # Expand labels
+                    labels.insert(start_index+k, labels[start_index+k])
+                    # Add image to list
+                    images = np.concatenate((images, noised.reshape(1, *noised.shape)))
+                    end_index += 1
 
         if serving.driver_name == 'tensorflow':
             feed_dict = {'input:0': images, 'phase_train:0': False}
@@ -306,7 +333,7 @@ def parse_arguments(argv):
     parser.add_argument(
         '--device',
         help='Device for openVINO.',
-        default="MYRIAD",
+        default="CPU",
         choices=["CPU", "MYRIAD"]
     )
     parser.add_argument(
@@ -319,6 +346,17 @@ def parse_arguments(argv):
         type=int,
         help='Number of images to process in a batch.',
         default=1
+    )
+    parser.add_argument(
+        '--noise',
+        action='store_true',
+        help='Add random noise to images.',
+    )
+    parser.add_argument(
+        '--noise-count',
+        type=int,
+        default=1,
+        help='Noise count for each image.',
     )
     parser.add_argument(
         '--image_size',
