@@ -250,6 +250,16 @@ def flip(image, random_flip):
     return image
 
 
+def rotate(image):
+    from PIL import Image
+    angle = np.random.random_integers(-10, 10, 1)[0]
+    if image.dtype in [np.float, np.float32, np.float64]:
+        image = (image * 255 / np.max(image)).astype('uint8')
+
+    im = Image.fromarray(image).rotate(angle, Image.BICUBIC)
+    return np.array(im)
+
+
 def random_noise(image):
     limit = (np.max(image) - np.min(image)) / 30
     mean = 0.0  # some constant

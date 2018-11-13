@@ -185,6 +185,9 @@ def main(args):
     if args.noise:
         embeddings_size += nrof_images * args.noise_count
 
+    if args.rotate:
+        embeddings_size += nrof_images * args.rotate_count
+
     emb_array = np.zeros((embeddings_size, 512))
     for i in range(nrof_batches_per_epoch):
         start_index = i * args.batch_size
@@ -195,16 +198,21 @@ def main(args):
             start_index += i * args.noise_count
             end_index += i * args.noise_count
 
+        if args.rotate:
+            start_index += i * args.rotate_count
+            end_index += i * args.rotate_count
+
         for j in range(end_index - start_index):
             print('Batch {} <-> {}'.format(paths_batch[j], labels[start_index + j]))
         images = facenet.load_data(paths_batch, False, False, args.image_size)
 
+        images_size = len(images)
         if args.noise:
-            for k, img in enumerate(images):
+            for k in range(images_size):
+                img = images[k]
                 for i in range(args.noise_count):
-
                     print(
-                        'Applying noise for image {}, #{}'.format(
+                        'Applying noise to image {}, #{}'.format(
                             paths_batch[k], i + 1
                         )
                     )
@@ -214,6 +222,22 @@ def main(args):
                     labels.insert(start_index+k, labels[start_index+k])
                     # Add image to list
                     images = np.concatenate((images, noised.reshape(1, *noised.shape)))
+                    end_index += 1
+
+        if args.rotate:
+            for k in range(images_size):
+                img = images[k]
+                for i in range(args.rotate_count):
+                    print(
+                        'Applying rotate to image {}, #{}'.format(
+                            paths_batch[k], i + 1
+                        )
+                    )
+                    rotated = facenet.rotate(img)
+                    # Expand labels
+                    labels.insert(start_index+k, labels[start_index+k])
+                    # Add image to list
+                    images = np.concatenate((images, rotated.reshape(1, *rotated.shape)))
                     end_index += 1
 
         if serving.driver_name == 'tensorflow':
@@ -357,6 +381,17 @@ def parse_arguments(argv):
         type=int,
         default=1,
         help='Noise count for each image.',
+    )
+    parser.add_argument(
+        '--rotate',
+        action='store_true',
+        help='Add random rotate to images.',
+    )
+    parser.add_argument(
+        '--rotate-count',
+        type=int,
+        default=1,
+        help='Rotate count for each image.',
     )
     parser.add_argument(
         '--image_size',
