@@ -73,6 +73,8 @@ def parse_arguments():
 
 
 def predict_http(image_path, client, serv_addr):
+    host, port = serv_addr.split(':')
+
     with open(image_path, 'rb') as f:
         content = f.read()
 
@@ -88,7 +90,8 @@ def predict_http(image_path, client, serv_addr):
         None,
         'any',
         inputs,
-        serving_address=serv_addr,
+        serving_address=host,
+        port=port,
     )
 
     js = response.json()
@@ -110,9 +113,7 @@ def get_stub(addr):
     if stub is not None:
         return stub
 
-    port = 9000
-    server = '%s:%s' % (addr, port)
-    channel = grpc.insecure_channel(server)
+    channel = grpc.insecure_channel(addr)
 
     stub = predict_pb2_grpc.PredictServiceStub(channel)
     return stub
@@ -263,12 +264,13 @@ if __name__ == '__main__':
 
     ml_serving_available = predict_pb2_grpc and predict_pb2 and tensor_util
     use_grpc = args.use_grpc and ml_serving_available
+    serv_addr = '%s:%s' % (args.host, args.port)
     for i, image_path in enumerate(paths):
         true_label = labels[i]
         print('Processing {}...'.format(image_path))
 
         t = time.time()
-        predicted = predict(image_path, mlboard, args.host, use_grpc)
+        predicted = predict(image_path, mlboard, serv_addr, use_grpc)
 
         delta = (time.time() - t) * 1000
         time_requests += delta
