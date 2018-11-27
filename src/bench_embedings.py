@@ -98,6 +98,7 @@ def main(args):
     end_time = time.time()
     nrof_batches_per_epoch *= 100
     print("Duration: {} sec/sample batch count:{}".format((end_time-start_time)/nrof_batches_per_epoch,nrof_batches_per_epoch))
+    print("Speed: {} sample/sec batch count:{}".format(nrof_batches_per_epoch/(end_time-start_time),nrof_batches_per_epoch))
 
 
 
