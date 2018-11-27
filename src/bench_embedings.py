@@ -95,7 +95,7 @@ def main(args):
         outputs = serving.predict(feed_dict)
 
     end_time = time.time()
-    print("Duration: {}".format((start_time-end_time)/nrof_batches_per_epoch))
+    print("Duration: {} sec/sample batch count:{}".format((end_time-start_time)/nrof_batches_per_epoch,nrof_batches_per_epoch))
 
 
 
