@@ -243,8 +243,8 @@ def postprocess(outputs, ctx, **kwargs):
                 'top': bb[1] - 5
             })
             # DEBUG
-            LOG.info('%4d  %s: %.3f' % (
-                i,
+            LOG.info('%2d. %s: %.3f' % (
+                img_idx,
                 class_names[best_class_indices[i]],
                 best_class_probabilities[i])
             )

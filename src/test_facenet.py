@@ -259,6 +259,7 @@ if __name__ == '__main__':
     predicted_labels = []
     time_requests = 0.0
     time_all_faces = 0.0
+    total_since = time.time()
 
     ml_serving_available = predict_pb2_grpc and predict_pb2 and tensor_util
     use_grpc = args.use_grpc and ml_serving_available
@@ -278,6 +279,9 @@ if __name__ == '__main__':
     indices = [class_names.index(p) for p in predicted_labels]
 
     print()
+    print('Total images: %d' % len(paths))
+    print('Total faces detected: %d' % len(predicted_labels))
+    print('Total time: %.3fs' % (time.time() - total_since))
     print(
         'Average time per request: %.3fms'
         % (time_requests / float(len(paths)))
