@@ -27,16 +27,10 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
-import datetime
 import math
-import os
-from os import path
-import pickle
 import sys
-import shutil
 
 import numpy as np
-from sklearn import svm
 import time
 
 import facenet
