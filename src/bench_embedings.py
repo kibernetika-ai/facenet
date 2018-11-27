@@ -75,26 +75,28 @@ def main(args):
     embeddings_size = nrof_images
     emb_array = np.zeros((embeddings_size, 512))
     start_time = time.time()
-    for i in range(nrof_batches_per_epoch):
-        start_index = i * args.batch_size
-        end_index = min((i + 1) * args.batch_size, nrof_images)
-        paths_batch = paths[start_index:end_index]
-        images = facenet.load_data(paths_batch, False, False, args.image_size)
+    for j in range(100):
+        for i in range(nrof_batches_per_epoch):
+            start_index = i * args.batch_size
+            end_index = min((i + 1) * args.batch_size, nrof_images)
+            paths_batch = paths[start_index:end_index]
+            images = facenet.load_data(paths_batch, False, False, args.image_size)
 
-        if serving.driver_name == 'tensorflow':
-            feed_dict = {'input:0': images, 'phase_train:0': False}
-        elif serving.driver_name == 'openvino':
-            input_name = list(serving.inputs.keys())[0]
+            if serving.driver_name == 'tensorflow':
+                feed_dict = {'input:0': images, 'phase_train:0': False}
+            elif serving.driver_name == 'openvino':
+                input_name = list(serving.inputs.keys())[0]
 
-            # Transpose image for channel first format
-            images = images.transpose([0, 3, 1, 2])
-            feed_dict = {input_name: images}
-        else:
-            raise RuntimeError('Driver %s currently not supported' % serving.driver_name)
+                # Transpose image for channel first format
+                images = images.transpose([0, 3, 1, 2])
+                feed_dict = {input_name: images}
+            else:
+                raise RuntimeError('Driver %s currently not supported' % serving.driver_name)
 
-        outputs = serving.predict(feed_dict)
+            outputs = serving.predict(feed_dict)
 
     end_time = time.time()
+    nrof_batches_per_epoch *= 100
     print("Duration: {} sec/sample batch count:{}".format((end_time-start_time)/nrof_batches_per_epoch,nrof_batches_per_epoch))
 
 
