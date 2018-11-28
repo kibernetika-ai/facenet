@@ -48,6 +48,8 @@ def init_hook(**kwargs):
             float(x) for x in PARAMS['threshold'].split(',')
         ]
     PARAMS['use_tf'] = boolean_string(PARAMS['use_tf'])
+    LOG.info('Init with params:')
+    LOG.info(PARAMS)
 
 
 def net_filenames(dir, net_name):
