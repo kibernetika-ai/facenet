@@ -7,6 +7,9 @@ import os
 from os import path
 import time
 
+import matplotlib
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 from mlboardclient.api import client
 from mlboardclient import api
