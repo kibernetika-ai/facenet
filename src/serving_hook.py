@@ -106,7 +106,10 @@ def load_nets(**kwargs):
         net = ie.IENetwork.from_ir(*net_filenames(model_dir, 'onet'))
         onet_proxy = OpenVINONet(plugin, net)
         onet_input_name = list(net.inputs.keys())[0]
-        onet_batch_size = net.inputs[onet_input_name][0]
+        if isinstance(net.inputs[onet_input_name], list):
+            onet_batch_size = net.inputs[onet_input_name][0]
+        else:
+            onet_batch_size = net.inputs[onet_input_name].shape[0]
         LOG.info('ONET_BATCH_SIZE = {}'.format(onet_batch_size))
 
         pnets, rnet, onet = detect_face.create_openvino_mtcnn(

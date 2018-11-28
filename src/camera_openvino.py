@@ -144,10 +144,11 @@ class PNetHandler(object):
         net = ie.IENetwork.from_ir(*net_filenames(
             plugin, 'pnet_{}x{}'.format(h, w), net_dir=net_dir)
         )
-        print(net.inputs)
         self.input_name = list(net.inputs.keys())[0]
-        self.output_name0 = net.outputs[0]
-        self.output_name1 = net.outputs[1]
+        LOG.info(net.outputs)
+        outputs = list(iter(net.outputs))
+        self.output_name0 = outputs[0]
+        self.output_name1 = outputs[1]
         self.exec_net = plugin.load(net)
         self.h = h
         self.w = w
@@ -210,18 +211,24 @@ def main():
     print('Load RNET')
     net = ie.IENetwork.from_ir(*net_filenames(plugin, 'rnet'))
     rnet_input_name = list(net.inputs.keys())[0]
-    rnet_output_name0 = net.outputs[0]
-    rnet_output_name1 = net.outputs[1]
+    outputs = list(iter(net.outputs))
+    rnet_output_name0 = outputs[0]
+    rnet_output_name1 = outputs[1]
     r_net = plugin.load(net)
 
     print('Load ONET')
 
     net = ie.IENetwork.from_ir(*net_filenames(plugin, 'onet'))
     onet_input_name = list(net.inputs.keys())[0]
-    onet_batch_size = net.inputs[onet_input_name][0]
-    onet_output_name0 = net.outputs[0]
-    onet_output_name1 = net.outputs[1]
-    onet_output_name2 = net.outputs[2]
+    if isinstance(net.inputs[onet_input_name], list):
+        onet_batch_size = net.inputs[onet_input_name][0]
+    else:
+        onet_batch_size = net.inputs[onet_input_name].shape[0]
+
+    outputs = list(iter(net.outputs))
+    onet_output_name0 = outputs[0]
+    onet_output_name1 = outputs[1]
+    onet_output_name2 = outputs[2]
     print('ONET_BATCH_SIZE = {}'.format(onet_batch_size))
     o_net = plugin.load(net)
 
@@ -233,7 +240,8 @@ def main():
 
         net = ie.IENetwork.from_ir(model_file, weights_file)
         facenet_input = list(net.inputs.keys())[0]
-        facenet_output = net.outputs[0]
+        output = list(iter(net.outputs))
+        facenet_output = outputs[0]
         face_net = plugin.load(net)
 
         # Load classifier
