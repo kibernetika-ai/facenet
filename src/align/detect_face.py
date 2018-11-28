@@ -1599,7 +1599,11 @@ def nms(boxes, threshold, method):
 def pad(total_boxes, w, h):
     """Compute the padding coordinates (pad the bounding boxes to square)"""
     tmpw = (total_boxes[:, 2] - total_boxes[:, 0] + 1).astype(np.int32)
+    if tmpw < 0:
+        tmpw = -tmpw
     tmph = (total_boxes[:, 3] - total_boxes[:, 1] + 1).astype(np.int32)
+    if tmph < 0:
+        tmph = -tmph
     numbox = total_boxes.shape[0]
 
     dx = np.ones((numbox), dtype=np.int32)
