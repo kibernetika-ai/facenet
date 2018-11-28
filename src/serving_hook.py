@@ -94,7 +94,7 @@ def load_nets(**kwargs):
 
         pnets_proxy = []
         for r in ko.parse_resolutions(PARAMS['resolutions']):
-            p = ko.PNetHandler(plugin, r[0], r[1])
+            p = ko.PNetHandler(plugin, r[0], r[1], net_dir=model_dir)
             pnets_proxy.append(p.proxy())
 
         LOG.info('Load RNET')

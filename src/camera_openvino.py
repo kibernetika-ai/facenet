@@ -140,8 +140,10 @@ def get_images(image, bounding_boxes):
 
 
 class PNetHandler(object):
-    def __init__(self, plugin, h, w):
-        net = ie.IENetwork.from_ir(*net_filenames(plugin, 'pnet_{}x{}'.format(h, w)))
+    def __init__(self, plugin, h, w, net_dir=None):
+        net = ie.IENetwork.from_ir(*net_filenames(
+            plugin, 'pnet_{}x{}'.format(h, w), net_dir=net_dir)
+        )
         print(net.inputs)
         self.input_name = list(net.inputs.keys())[0]
         self.output_name0 = net.outputs[0]
@@ -168,9 +170,11 @@ class PNetHandler(object):
         return _exec, self.h, self.w
 
 
-def net_filenames(plugin, net_name):
-    device = plugin.device.lower()
-    base_name = 'openvino-{}/{}'.format(device, net_name)
+def net_filenames(plugin, net_name, net_dir=None):
+    if not net_dir:
+        device = plugin.device.lower()
+        net_dir = 'openvino-{}'.format(device)
+    base_name = '{}/{}'.format(net_dir, net_name)
     xml_name = base_name + '.xml'
     bin_name = base_name + '.bin'
     return xml_name, bin_name
