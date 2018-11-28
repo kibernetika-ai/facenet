@@ -32,6 +32,13 @@ model = None
 class_names = None
 
 
+def boolean_string(s):
+    s = s.lower()
+    if s not in {'false', 'true'}:
+        raise ValueError('Not a valid boolean string')
+    return s == 'true'
+
+
 def init_hook(**kwargs):
     global PARAMS
     PARAMS.update(kwargs)
@@ -40,7 +47,7 @@ def init_hook(**kwargs):
         PARAMS['threshold'] = [
             float(x) for x in PARAMS['threshold'].split(',')
         ]
-    PARAMS['use_tf'] = bool(PARAMS['use_tf'])
+    PARAMS['use_tf'] = boolean_string(PARAMS['use_tf'])
 
 
 def net_filenames(dir, net_name):
