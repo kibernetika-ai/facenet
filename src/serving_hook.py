@@ -1,3 +1,4 @@
+import json
 import logging
 import pickle
 
@@ -49,7 +50,7 @@ def init_hook(**kwargs):
         ]
     PARAMS['use_tf'] = boolean_string(PARAMS['use_tf'])
     LOG.info('Init with params:')
-    LOG.info(PARAMS)
+    LOG.info(json.dumps(PARAMS, indent=2))
 
 
 def net_filenames(dir, net_name):
