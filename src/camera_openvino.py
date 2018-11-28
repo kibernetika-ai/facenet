@@ -144,10 +144,11 @@ class PNetHandler(object):
         net = ie.IENetwork.from_ir(*net_filenames(
             plugin, 'pnet_{}x{}'.format(h, w), net_dir=net_dir)
         )
-        print(net.inputs)
         self.input_name = list(net.inputs.keys())[0]
-        self.output_name0 = net.outputs[0]
-        self.output_name1 = net.outputs[1]
+        LOG.info(net.outputs)
+        outputs = list(iter(net.outputs))
+        self.output_name0 = outputs[0]
+        self.output_name1 = outputs[1]
         self.exec_net = plugin.load(net)
         self.h = h
         self.w = w
