@@ -32,6 +32,13 @@ except ImportError:
     tensor_util = None
 
 
+MAX_LENGTH = 67108864  # 64 MB
+opts = [
+    ('grpc.max_send_message_length', MAX_LENGTH),
+    ('grpc.max_receive_message_length', MAX_LENGTH)
+]
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -116,7 +123,7 @@ def get_stub(addr):
     if stub is not None:
         return stub
 
-    channel = grpc.insecure_channel(addr)
+    channel = grpc.insecure_channel(addr, options=opts)
 
     stub = predict_pb2_grpc.PredictServiceStub(channel)
     return stub

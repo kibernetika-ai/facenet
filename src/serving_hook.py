@@ -1,5 +1,6 @@
 import json
 import logging
+from os import path
 import pickle
 
 import cv2
@@ -21,6 +22,8 @@ PARAMS = {
     'classifier': '',
     'threshold': [0.6, 0.7, 0.7],
     'use_tf': False,
+    'use_face_detection': False,
+    'face_detection_path': '',
     'tf_path': '/tf-data'
 }
 width = 640
@@ -30,6 +33,7 @@ pnets = None
 rnet = None
 onet = None
 model = None
+face_detect = None
 class_names = None
 
 
@@ -96,17 +100,33 @@ class ONet(OpenVINONet):
     ]
 
 
+class FaceDetect(OpenVINONet):
+    output_list = ['detection_out']
+
+
 def load_nets(**kwargs):
     global pnets
     global rnet
     global onet
 
     use_tf = PARAMS['use_tf']
+    use_face = PARAMS['use_face_detection']
     if use_tf:
         model_path = PARAMS['tf_path']
         import tensorflow as tf
         sess = tf.Session()
         pnets, rnet, onet = detect_face.create_mtcnn(sess, model_path)
+    elif use_face:
+        LOG.info('Load FACE DETECTION')
+        plugin = kwargs.get('plugin')
+        model_dir = PARAMS.get('face_detection_path')
+
+        net = ie.IENetwork.from_ir(
+            path.join(model_dir, 'face-detection-retail-0004.xml'),
+            path.join(model_dir, 'face-detection-retail-0004.bin')
+        )
+        global face_detect
+        face_detect = FaceDetect(plugin, net)
     else:
         plugin = kwargs.get('plugin')
         model_dir = PARAMS.get('align_model_dir')
@@ -186,6 +206,7 @@ def preprocess(inputs, ctx, **kwargs):
         net_loaded = True
 
     image = inputs.get('input')
+    image_pil = None
     if image is None:
         raise RuntimeError('Missing "input" key in inputs. Provide an image in "input" key')
 
@@ -195,16 +216,17 @@ def preprocess(inputs, ctx, **kwargs):
     if isinstance(image[0], (six.string_types, bytes)):
         image = Image.open(io.BytesIO(image[0]))
 
-        image = image.convert('RGB')
-        image = np.array(image)
+        image_pil = image.convert('RGB')
+        image = np.array(image_pil)
 
     if image.shape[2] == 4:
         # Convert RGBA -> RGB
         rgba_image = Image.fromarray(image)
-        image = rgba_image.convert('RGB')
-        image = np.array(image)
+        image_pil = rgba_image.convert('RGB')
+        image = np.array(image_pil)
 
     use_tf = PARAMS['use_tf']
+    use_face = PARAMS['use_face_detection']
     frame = image
     scaled = (1, 1)
 
@@ -214,6 +236,15 @@ def preprocess(inputs, ctx, **kwargs):
         elif image.shape[1] > width:
             frame = image_resize(image, width=width)
             scaled = (float(width) / image.shape[1], float(height) / image.shape[0])
+    elif use_face:
+        if image_pil is None:
+            image_pil = Image.fromarray(image)
+
+        data = image_pil.resize((300, 300), Image.ANTIALIAS)
+        data = np.array(data).transpose([2, 0, 1]).reshape(1, 3, 300, 300)
+        # convert to BGR
+        data = data[:, ::-1, :, :]
+        frame = image
     else:
         if image.shape[0] != height or image.shape[1] != width:
             frame = cv2.resize(
@@ -225,6 +256,21 @@ def preprocess(inputs, ctx, **kwargs):
         bounding_boxes, _ = detect_face.detect_face(
             frame, 20, pnets, rnet, onet, PARAMS['threshold'], 0.709
         )
+    elif use_face:
+        raw = face_detect(data).reshape([-1, 7])
+        # 7 values:
+        # class_id, label, confidence, x_min, y_min, x_max, y_max
+        # Select boxes where confidence > factor
+        bboxes_raw = raw[raw[:, 2] > PARAMS['threshold'][0]]
+        bboxes_raw[:, 3] = bboxes_raw[:, 3] * image_pil.width
+        bboxes_raw[:, 5] = bboxes_raw[:, 5] * image_pil.width
+        bboxes_raw[:, 4] = bboxes_raw[:, 4] * image_pil.height
+        bboxes_raw[:, 6] = bboxes_raw[:, 6] * image_pil.height
+
+        bounding_boxes = np.zeros([len(bboxes_raw), 5])
+
+        bounding_boxes[:, 0:4] = bboxes_raw[:, 3:7]
+        bounding_boxes[:, 4] = bboxes_raw[:, 2]
     else:
         bounding_boxes, _ = detect_face.detect_face_openvino(
             frame, pnets, rnet, onet, PARAMS['threshold']
