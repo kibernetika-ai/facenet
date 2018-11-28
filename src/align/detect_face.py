@@ -1249,7 +1249,7 @@ def detect_face_openvino(img, pnets, rnet, onet, threshold):
         dy, edy, dx, edx, y, ey, x, ex, tmpw, tmph = pad(total_boxes.copy(), w, h)
         tempimg = np.zeros((48, 48, 3, numbox))
         for k in range(0, numbox):
-            tmp = np.zeros((int(tmph[k]), int(tmpw[k]), 3))
+            tmp = np.zeros((abs(int(tmph[k])), abs(int(tmpw[k])), 3))
             if edy[k] < dy[k] - 1:
                 dy[k], edy[k] = edy[k], dy[k]
             if dx[k] < dx[k] - 1:
@@ -1599,11 +1599,7 @@ def nms(boxes, threshold, method):
 def pad(total_boxes, w, h):
     """Compute the padding coordinates (pad the bounding boxes to square)"""
     tmpw = (total_boxes[:, 2] - total_boxes[:, 0] + 1).astype(np.int32)
-    if tmpw < 0:
-        tmpw = -tmpw
     tmph = (total_boxes[:, 3] - total_boxes[:, 1] + 1).astype(np.int32)
-    if tmph < 0:
-        tmph = -tmph
     numbox = total_boxes.shape[0]
 
     dx = np.ones((numbox), dtype=np.int32)
