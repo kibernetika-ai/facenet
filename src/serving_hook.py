@@ -119,11 +119,12 @@ def load_nets(**kwargs):
     elif use_face:
         LOG.info('Load FACE DETECTION')
         plugin = kwargs.get('plugin')
-        model_dir = PARAMS.get('face_detection_path')
+        model_path = PARAMS.get('face_detection_path')
+        bin_path = model_path[:model_path.rfind('.')] + '.bin'
 
         net = ie.IENetwork.from_ir(
-            path.join(model_dir, 'face-detection-retail-0004.xml'),
-            path.join(model_dir, 'face-detection-retail-0004.bin')
+            path.join(model_path),
+            path.join(bin_path)
         )
         global face_detect
         face_detect = FaceDetect(plugin, net)
@@ -165,6 +166,7 @@ def load_nets(**kwargs):
         if six.PY3:
             opts['encoding'] = 'latin1'
         (model, class_names) = pickle.load(**opts)
+    LOG.info('Done.')
 
 
 def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
