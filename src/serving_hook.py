@@ -61,10 +61,16 @@ def net_filenames(dir, net_name):
 
 
 class OpenVINONet(object):
+    output_list = None
+
     def __init__(self, plugin, net):
         self.exec_net = plugin.load(net)
-        self.outputs = net.outputs
+        if self.output_list:
+            self.outputs = self.output_list
+        else:
+            self.outputs = list(iter(net.outputs))
         self.input = list(net.inputs.keys())[0]
+        LOG.info(self.outputs)
 
     def __call__(self, img):
         output = self.exec_net.infer({self.input: img})
@@ -73,6 +79,21 @@ class OpenVINONet(object):
             return out[0]
         else:
             return out
+
+
+class RNet(OpenVINONet):
+    output_list = [
+        'rnet/conv5-2/conv5-2/MatMul',
+        'rnet/prob1'
+    ]
+
+
+class ONet(OpenVINONet):
+    output_list = [
+        'onet/conv6-2/conv6-2/MatMul',
+        'onet/conv6-3/conv6-3/MatMul',
+        'onet/prob1'
+    ]
 
 
 def load_nets(**kwargs):
@@ -99,12 +120,12 @@ def load_nets(**kwargs):
 
         LOG.info('Load RNET')
         net = ie.IENetwork.from_ir(*net_filenames(model_dir, 'rnet'))
-        rnet_proxy = OpenVINONet(plugin, net)
+        rnet_proxy = RNet(plugin, net)
 
         LOG.info('Load ONET')
 
         net = ie.IENetwork.from_ir(*net_filenames(model_dir, 'onet'))
-        onet_proxy = OpenVINONet(plugin, net)
+        onet_proxy = ONet(plugin, net)
         onet_input_name = list(net.inputs.keys())[0]
         if isinstance(net.inputs[onet_input_name], list):
             onet_batch_size = net.inputs[onet_input_name][0]
