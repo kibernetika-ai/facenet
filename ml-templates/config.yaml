@@ -117,7 +117,6 @@ spec:
       requests:
         cpu: 100m
         memory: 64Mi
-
   serving:
   - name: serving
     displayName: OpenVino Serving
@@ -143,15 +142,27 @@ spec:
         - output
       outMimeType: "image/png"
     workDir: $SRC_DIR
+    sources:
+    - gitRepo:
+        repository: {{ gitRepo .src.value }}
+        accountId: '{{ .src.accountId }}'
+        revision: '{{ .src.revision }}'
+      isLibDir: false
+      name: src
+      subPath: {{ gitSubPath .src.value }}/src
+    - clusterStorage: '{{ .storage.value }}'
+      name: training
+    - isLibDir: false
+      name: facenet
+      model:
+        workspace: {{ .model.workspace }}
+        model: {{ .model.value }}
+        version: {{ .model.version }}
     ports:
     - port: 9000
       targetPort: 9000
       protocol: TCP
       name: http
-    volumes:
-    - name: training
-    - name: src
-    - name: facenet
   volumes:
   - clusterStorage: '{{ .storage.value }}'
     name: training
