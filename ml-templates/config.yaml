@@ -122,7 +122,7 @@ spec:
     displayName: OpenVino Serving
     images:
       cpu: "kuberlab/serving:latest-openvino"
-    command: "kuberlab-serving --driver openvino --model-path $FACENET_DIR/facenet.xml --hooks serving_hook.py -o classifier=$TRAINING_DIR/classifier.pkl -o flexible_batch_size=True -o resolutions=14x19,19x27,26x37,37x52,52x74,73x104,103x146,145x206,205x290 -o use_tf=true -o tf_path=$FACENET_DIR"
+    command: "kuberlab-serving --driver openvino --model-path $FACENET_DIR/facenet.xml --hooks serving_hook.py -o classifier=$MODEL_DIR/classifier.pkl -o flexible_batch_size=True -o resolutions=14x19,19x27,26x37,37x52,52x74,73x104,103x146,145x206,205x290 -o use_tf=true -o tf_path=$FACENET_DIR"
     resources:
       accelerators:
         gpu: 0
@@ -150,8 +150,6 @@ spec:
       isLibDir: false
       name: src
       subPath: {{ gitSubPath .src.value }}/src
-    - clusterStorage: '{{ .storage.value }}'
-      name: training
     - isLibDir: false
       name: facenet
       model:
