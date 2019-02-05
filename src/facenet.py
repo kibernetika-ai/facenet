@@ -27,19 +27,21 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import math
 import os
-from subprocess import Popen, PIPE
-import tensorflow as tf
-import numpy as np
-from scipy import misc
-from sklearn.model_selection import KFold
-from scipy import interpolate
-from tensorflow.python.training import training
 import random
 import re
-from tensorflow.python.platform import gfile
-import math
+from subprocess import Popen, PIPE
+
+import numpy as np
+from PIL import Image
+from scipy import interpolate
+from scipy import misc
 from six import iteritems
+from sklearn.model_selection import KFold
+import tensorflow as tf
+from tensorflow.python.training import training
+from tensorflow.python.platform import gfile
 
 
 def triplet_loss(anchor, positive, negative, alpha):
@@ -283,6 +285,9 @@ def load_data(image_paths, do_random_crop, do_random_flip, image_size, do_prewhi
         img = misc.imread(image_paths[i])
         if img.ndim == 2:
             img = to_rgb(img)
+        if len(img.shape) >= 3 and img.shape[2] > 3:
+            # RGBA, convert to RGB
+            img = np.array(Image.fromarray(img).convert('RGB'))
         if do_prewhiten:
             img = prewhiten(img)
         img = crop(img, do_random_crop, image_size)
