@@ -12,6 +12,7 @@ import six
 
 import camera_openvino as ko
 from align import detect_face
+import base64
 
 
 LOG = logging.getLogger(__name__)
@@ -299,7 +300,8 @@ def postprocess(outputs, ctx, **kwargs):
     LOG.info('output shape = {}'.format(facenet_output.shape))
 
     labels = []
-
+    scores_out = []
+    table_text = []
     for img_idx, item_output in enumerate(facenet_output):
         if ctx.skip:
             break
@@ -319,6 +321,8 @@ def postprocess(outputs, ctx, **kwargs):
                 best_class_probabilities[i] * 100,
                 class_names[best_class_indices[i]]
             )
+            table_text.append(class_names[best_class_indices[i]])
+            scores_out.append(float(best_class_probabilities[i]))
             labels.append({
                 'label': text,
                 'left': bb[0],
@@ -331,8 +335,27 @@ def postprocess(outputs, ctx, **kwargs):
                 best_class_probabilities[i])
             )
 
-    #for i,b in enumerate(ctx.bounding_boxes):
-    #    cim = ctx.frame
+    table = []
+    text_labels = [l['label'] for l in labels]
+    for i,b in enumerate(ctx.bounding_boxes):
+        x_min = max(0,b[0])
+        y_min = max(0,b[1])
+        x_max = min(ctx.frame.shape[1],b[2])
+        y_max = min(ctx.frame.shape[0],b[3])
+        cim = ctx.frame[y_min:y_max,x_min:x_max]
+        image_bytes = io.BytesIO()
+        im = Image.fromarray(cim)
+        im.save(image_bytes, format='PNG')
+
+        encoded = base64.encodebytes(image_bytes.getvalue()).decode()
+        table.append(
+            {
+                'type': 'text',
+                'name': table_text[i],
+                'probability': float(scores_out[i]),
+                'image': encoded
+            }
+        )
     if not ctx.skip:
         ko.add_overlays(ctx.frame, ctx.bounding_boxes, 0, labels=labels)
 
@@ -341,9 +364,11 @@ def postprocess(outputs, ctx, **kwargs):
     im = Image.fromarray(ctx.frame)
     im.save(image_bytes, format='PNG')
 
-    text_labels = [l['label'] for l in labels]
+
     return {
         'output': image_bytes.getvalue(),
         'boxes': ctx.bounding_boxes,
         'labels': np.array(text_labels, dtype=np.string_)
+        'table_output': json.dumps(table),
     }
+
