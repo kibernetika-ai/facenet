@@ -1,4 +1,6 @@
+import json
 import logging
+from os import path
 import pickle
 
 import cv2
@@ -20,6 +22,8 @@ PARAMS = {
     'classifier': '',
     'threshold': [0.6, 0.7, 0.7],
     'use_tf': False,
+    'use_face_detection': False,
+    'face_detection_path': '',
     'tf_path': '/tf-data'
 }
 width = 640
@@ -29,7 +33,15 @@ pnets = None
 rnet = None
 onet = None
 model = None
+face_detect = None
 class_names = None
+
+
+def boolean_string(s):
+    s = s.lower()
+    if s not in {'false', 'true'}:
+        raise ValueError('Not a valid boolean string')
+    return s == 'true'
 
 
 def init_hook(**kwargs):
@@ -40,7 +52,9 @@ def init_hook(**kwargs):
         PARAMS['threshold'] = [
             float(x) for x in PARAMS['threshold'].split(',')
         ]
-    PARAMS['use_tf'] = bool(PARAMS['use_tf'])
+    PARAMS['use_tf'] = boolean_string(PARAMS['use_tf'])
+    LOG.info('Init with params:')
+    LOG.info(json.dumps(PARAMS, indent=2))
 
 
 def net_filenames(dir, net_name):
@@ -51,10 +65,16 @@ def net_filenames(dir, net_name):
 
 
 class OpenVINONet(object):
+    output_list = None
+
     def __init__(self, plugin, net):
         self.exec_net = plugin.load(net)
-        self.outputs = net.outputs
+        if self.output_list:
+            self.outputs = self.output_list
+        else:
+            self.outputs = list(iter(net.outputs))
         self.input = list(net.inputs.keys())[0]
+        LOG.info(self.outputs)
 
     def __call__(self, img):
         output = self.exec_net.infer({self.input: img})
@@ -65,17 +85,49 @@ class OpenVINONet(object):
             return out
 
 
+class RNet(OpenVINONet):
+    output_list = [
+        'rnet/conv5-2/conv5-2/MatMul',
+        'rnet/prob1'
+    ]
+
+
+class ONet(OpenVINONet):
+    output_list = [
+        'onet/conv6-2/conv6-2/MatMul',
+        'onet/conv6-3/conv6-3/MatMul',
+        'onet/prob1'
+    ]
+
+
+class FaceDetect(OpenVINONet):
+    output_list = ['detection_out']
+
+
 def load_nets(**kwargs):
     global pnets
     global rnet
     global onet
 
     use_tf = PARAMS['use_tf']
+    use_face = PARAMS['use_face_detection']
     if use_tf:
         model_path = PARAMS['tf_path']
         import tensorflow as tf
         sess = tf.Session()
         pnets, rnet, onet = detect_face.create_mtcnn(sess, model_path)
+    elif use_face:
+        LOG.info('Load FACE DETECTION')
+        plugin = kwargs.get('plugin')
+        model_path = PARAMS.get('face_detection_path')
+        bin_path = model_path[:model_path.rfind('.')] + '.bin'
+
+        net = ie.IENetwork.from_ir(
+            path.join(model_path),
+            path.join(bin_path)
+        )
+        global face_detect
+        face_detect = FaceDetect(plugin, net)
     else:
         plugin = kwargs.get('plugin')
         model_dir = PARAMS.get('align_model_dir')
@@ -84,19 +136,22 @@ def load_nets(**kwargs):
 
         pnets_proxy = []
         for r in ko.parse_resolutions(PARAMS['resolutions']):
-            p = ko.PNetHandler(plugin, r[0], r[1])
+            p = ko.PNetHandler(plugin, r[0], r[1], net_dir=model_dir)
             pnets_proxy.append(p.proxy())
 
         LOG.info('Load RNET')
         net = ie.IENetwork.from_ir(*net_filenames(model_dir, 'rnet'))
-        rnet_proxy = OpenVINONet(plugin, net)
+        rnet_proxy = RNet(plugin, net)
 
         LOG.info('Load ONET')
 
         net = ie.IENetwork.from_ir(*net_filenames(model_dir, 'onet'))
-        onet_proxy = OpenVINONet(plugin, net)
+        onet_proxy = ONet(plugin, net)
         onet_input_name = list(net.inputs.keys())[0]
-        onet_batch_size = net.inputs[onet_input_name][0]
+        if isinstance(net.inputs[onet_input_name], list):
+            onet_batch_size = net.inputs[onet_input_name][0]
+        else:
+            onet_batch_size = net.inputs[onet_input_name].shape[0]
         LOG.info('ONET_BATCH_SIZE = {}'.format(onet_batch_size))
 
         pnets, rnet, onet = detect_face.create_openvino_mtcnn(
@@ -111,6 +166,7 @@ def load_nets(**kwargs):
         if six.PY3:
             opts['encoding'] = 'latin1'
         (model, class_names) = pickle.load(**opts)
+    LOG.info('Done.')
 
 
 def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
@@ -152,6 +208,7 @@ def preprocess(inputs, ctx, **kwargs):
         net_loaded = True
 
     image = inputs.get('input')
+    image_pil = None
     if image is None:
         raise RuntimeError('Missing "input" key in inputs. Provide an image in "input" key')
 
@@ -161,16 +218,17 @@ def preprocess(inputs, ctx, **kwargs):
     if isinstance(image[0], (six.string_types, bytes)):
         image = Image.open(io.BytesIO(image[0]))
 
-        image = image.convert('RGB')
-        image = np.array(image)
+        image_pil = image.convert('RGB')
+        image = np.array(image_pil)
 
     if image.shape[2] == 4:
         # Convert RGBA -> RGB
         rgba_image = Image.fromarray(image)
-        image = rgba_image.convert('RGB')
-        image = np.array(image)
+        image_pil = rgba_image.convert('RGB')
+        image = np.array(image_pil)
 
     use_tf = PARAMS['use_tf']
+    use_face = PARAMS['use_face_detection']
     frame = image
     scaled = (1, 1)
 
@@ -180,6 +238,15 @@ def preprocess(inputs, ctx, **kwargs):
         elif image.shape[1] > width:
             frame = image_resize(image, width=width)
             scaled = (float(width) / image.shape[1], float(height) / image.shape[0])
+    elif use_face:
+        if image_pil is None:
+            image_pil = Image.fromarray(image)
+
+        data = image_pil.resize((300, 300), Image.ANTIALIAS)
+        data = np.array(data).transpose([2, 0, 1]).reshape(1, 3, 300, 300)
+        # convert to BGR
+        data = data[:, ::-1, :, :]
+        frame = image
     else:
         if image.shape[0] != height or image.shape[1] != width:
             frame = cv2.resize(
@@ -191,6 +258,21 @@ def preprocess(inputs, ctx, **kwargs):
         bounding_boxes, _ = detect_face.detect_face(
             frame, 20, pnets, rnet, onet, PARAMS['threshold'], 0.709
         )
+    elif use_face:
+        raw = face_detect(data).reshape([-1, 7])
+        # 7 values:
+        # class_id, label, confidence, x_min, y_min, x_max, y_max
+        # Select boxes where confidence > factor
+        bboxes_raw = raw[raw[:, 2] > PARAMS['threshold'][0]]
+        bboxes_raw[:, 3] = bboxes_raw[:, 3] * image_pil.width
+        bboxes_raw[:, 5] = bboxes_raw[:, 5] * image_pil.width
+        bboxes_raw[:, 4] = bboxes_raw[:, 4] * image_pil.height
+        bboxes_raw[:, 6] = bboxes_raw[:, 6] * image_pil.height
+
+        bounding_boxes = np.zeros([len(bboxes_raw), 5])
+
+        bounding_boxes[:, 0:4] = bboxes_raw[:, 3:7]
+        bounding_boxes[:, 4] = bboxes_raw[:, 2]
     else:
         bounding_boxes, _ = detect_face.detect_face_openvino(
             frame, pnets, rnet, onet, PARAMS['threshold']

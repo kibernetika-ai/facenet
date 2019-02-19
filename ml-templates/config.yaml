@@ -117,13 +117,12 @@ spec:
       requests:
         cpu: 100m
         memory: 64Mi
-
   serving:
   - name: serving
     displayName: OpenVino Serving
     images:
       cpu: "kuberlab/serving:latest-openvino"
-    command: "kuberlab-serving --driver openvino --model-path $FACENET_DIR/facenet.xml --hooks serving_hook.py -o classifier=$TRAINING_DIR/classifier.pkl -o flexible_batch_size=True -o resolutions=14x19,19x27,26x37,37x52,52x74,73x104,103x146,145x206,205x290 -o use_tf=true -o tf_path=$FACENET_DIR"
+    command: "kuberlab-serving --driver openvino --model-path $FACENET_DIR/facenet.xml --hooks serving_hook.py -o classifier=$MODEL_DIR/classifier.pkl -o flexible_batch_size=True -o resolutions=14x19,19x27,26x37,37x52,52x74,73x104,103x146,145x206,205x290 -o use_tf=true -o tf_path=$FACENET_DIR"
     resources:
       accelerators:
         gpu: 0
@@ -150,15 +149,25 @@ spec:
         - output
       outMimeType: "image/png"
     workDir: $SRC_DIR
+    sources:
+    - gitRepo:
+        repository: {{ gitRepo .src.value }}
+        accountId: '{{ .src.accountId }}'
+        revision: '{{ .src.revision }}'
+      isLibDir: false
+      name: src
+      subPath: {{ gitSubPath .src.value }}/src
+    - isLibDir: false
+      name: facenet
+      model:
+        workspace: {{ .model.workspace }}
+        model: {{ .model.value }}
+        version: {{ .model.version }}
     ports:
     - port: 9000
       targetPort: 9000
       protocol: TCP
       name: http
-    volumes:
-    - name: training
-    - name: src
-    - name: facenet
   volumes:
   - clusterStorage: '{{ .storage.value }}'
     name: training

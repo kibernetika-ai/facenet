@@ -1123,7 +1123,7 @@ def detect_face(img, minsize, pnet, rnet, onet, threshold, factor, resolutions=N
             if tmp.shape[0] > 0 and tmp.shape[1] > 0 or tmp.shape[0] == 0 and tmp.shape[1] == 0:
                 tempimg[:, :, :, k] = imresample(tmp, (48, 48))
             else:
-                return np.empty()
+                return np.empty(0), np.empty(0)
         tempimg = (tempimg - 127.5) * 0.0078125
         tempimg1 = np.transpose(tempimg, (3, 1, 0, 2))
         out = onet(tempimg1)
@@ -1249,7 +1249,7 @@ def detect_face_openvino(img, pnets, rnet, onet, threshold):
         dy, edy, dx, edx, y, ey, x, ex, tmpw, tmph = pad(total_boxes.copy(), w, h)
         tempimg = np.zeros((48, 48, 3, numbox))
         for k in range(0, numbox):
-            tmp = np.zeros((int(tmph[k]), int(tmpw[k]), 3))
+            tmp = np.zeros((abs(int(tmph[k])), abs(int(tmpw[k])), 3))
             if edy[k] < dy[k] - 1:
                 dy[k], edy[k] = edy[k], dy[k]
             if dx[k] < dx[k] - 1:
@@ -1263,7 +1263,7 @@ def detect_face_openvino(img, pnets, rnet, onet, threshold):
             if tmp.shape[0] > 0 and tmp.shape[1] > 0 or tmp.shape[0] == 0 and tmp.shape[1] == 0:
                 tempimg[:, :, :, k] = imresample(tmp, (48, 48))
             else:
-                return np.empty()
+                return np.empty(0), np.empty(0)
         tempimg = (tempimg - 127.5) * 0.0078125
         # t = time.time()
         # __import__('ipdb').set_trace()

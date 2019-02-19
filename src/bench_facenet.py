@@ -6,19 +6,19 @@ import argparse
 import math
 import sys
 
+from ml_serving.drivers import driver
 import numpy as np
 import time
 
 import facenet
-from ml_serving.drivers import driver
+import serving_hook
 
 
-
+class Context(object):
+    pass
 
 
 def main(args):
-
-
     dataset = facenet.get_dataset(args.data_dir)
     # Check that there are at least one training image per class
     for cls in dataset:
@@ -35,7 +35,15 @@ def main(args):
     # Load driver
     drv = driver.load_driver(args.driver)
     # Instantinate driver
-    serving = drv()
+    serving = drv(
+        preprocess=serving_hook.preprocess,
+        postprocess=serving_hook.postprocess,
+        init_hook=serving_hook.init_hook,
+        classifier=args.classifier,
+        use_tf='False',
+        use_face_detection='True',
+        face_detection_path=args.face_detection_path
+    )
     serving.load_model(
         args.model,
         inputs='input:0,phase_train:0',
@@ -46,52 +54,57 @@ def main(args):
 
     # Run forward pass to calculate embeddings
     print('Calculating features for images')
-    nrof_images = len(paths)
-    nrof_batches_per_epoch = int(math.ceil(1.0 * nrof_images / args.batch_size))
-    embeddings_size = nrof_images
-    emb_array = np.zeros((embeddings_size, 512))
+    time_requests = 0.0
+    epochs = 2
     start_time = time.time()
-    for j in range(100):
-        for i in range(nrof_batches_per_epoch):
-            start_index = i * args.batch_size
-            end_index = min((i + 1) * args.batch_size, nrof_images)
-            paths_batch = paths[start_index:end_index]
-            images = facenet.load_data(paths_batch, False, False, args.image_size)
+    for j in range(epochs):
+        for path in paths:
+            print('Processing %s...' % path)
+            with open(path, 'rb') as f:
+                data = f.read()
 
-            if serving.driver_name == 'tensorflow':
-                feed_dict = {'input:0': images, 'phase_train:0': False}
-            elif serving.driver_name == 'openvino':
-                input_name = list(serving.inputs.keys())[0]
+            t = time.time()
 
-                # Transpose image for channel first format
-                images = images.transpose([0, 3, 1, 2])
-                feed_dict = {input_name: images}
-            else:
-                raise RuntimeError('Driver %s currently not supported' % serving.driver_name)
+            feed_dict = {'input': np.array(data)}
+            outputs = serving.predict_hooks(feed_dict, context=Context())
 
-            outputs = serving.predict(feed_dict)
+            delta = (time.time() - t) * 1000
+            time_requests += delta
 
-    end_time = time.time()
-    nrof_batches_per_epoch *= 100
-    print("Duration: {} sec/sample batch count:{}".format((end_time-start_time)/nrof_batches_per_epoch,nrof_batches_per_epoch))
-    print("Speed: {} sample/sec batch count:{}".format(nrof_batches_per_epoch/(end_time-start_time),nrof_batches_per_epoch))
+    duration = float(time.time() - start_time)
+    print()
+    print('Total time: %.3fs' % duration)
+    per_request_ms = float(time_requests) / epochs / len(paths)
+    print('Time per request: %.3fms' % per_request_ms)
 
-
+    speed = 1 / (per_request_ms / 1000)
+    print('Speed: {} sample/sec'.format(speed))
 
 
 def parse_arguments(argv):
     parser = argparse.ArgumentParser()
 
-
     parser.add_argument(
         'data_dir',
         type=str,
-        help='Path to the data directory containing aligned LFW face patches.'
+        help='Path to the data directory containing images.'
     )
     parser.add_argument(
         '--model',
         type=str,
         help='Path to .xml openVINO IR file',
+        required=True,
+    )
+    parser.add_argument(
+        '--classifier',
+        type=str,
+        help='Path to classifier .pkl file',
+        required=True,
+    )
+    parser.add_argument(
+        '--face-detection-path',
+        type=str,
+        help='Path to face-detection .xml openVINO IR file',
         required=True,
     )
 

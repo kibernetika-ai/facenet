@@ -28,6 +28,11 @@ def get_parser():
         help='Image',
     )
     parser.add_argument(
+        '--model-dir',
+        default=None,
+        help='Base models dir',
+    )
+    parser.add_argument(
         '--factor',
         type=float,
         default=0.709,
@@ -140,12 +145,19 @@ def get_images(image, bounding_boxes):
 
 
 class PNetHandler(object):
-    def __init__(self, plugin, h, w):
-        net = ie.IENetwork.from_ir(*net_filenames(plugin, 'pnet_{}x{}'.format(h, w)))
-        print(net.inputs)
+    def __init__(self, plugin, h, w, net_dir=None):
+        net = ie.IENetwork.from_ir(*net_filenames(
+            plugin, 'pnet_{}x{}'.format(h, w), net_dir=net_dir)
+        )
         self.input_name = list(net.inputs.keys())[0]
-        self.output_name0 = net.outputs[0]
-        self.output_name1 = net.outputs[1]
+        LOG.info(net.outputs)
+        outputs = net.outputs
+        if isinstance(outputs, dict):
+            self.output_name0 = 'pnet/conv4-2/Conv2D'
+            self.output_name1 = 'pnet/prob1'
+        elif isinstance(outputs, list):
+            self.output_name0 = outputs[0]
+            self.output_name1 = outputs[1]
         self.exec_net = plugin.load(net)
         self.h = h
         self.w = w
@@ -168,9 +180,11 @@ class PNetHandler(object):
         return _exec, self.h, self.w
 
 
-def net_filenames(plugin, net_name):
-    device = plugin.device.lower()
-    base_name = 'openvino-{}/{}'.format(device, net_name)
+def net_filenames(plugin, net_name, net_dir=None):
+    if not net_dir:
+        device = plugin.device.lower()
+        net_dir = 'openvino-{}'.format(device)
+    base_name = '{}/{}'.format(net_dir, net_name)
     xml_name = base_name + '.xml'
     bin_name = base_name + '.bin'
     return xml_name, bin_name
@@ -200,24 +214,34 @@ def main():
 
     pnets = []
     for r in parse_resolutions(args.resolutions):
-        p = PNetHandler(plugin, r[0], r[1])
+        p = PNetHandler(plugin, r[0], r[1], net_dir=args.model_dir)
         pnets.append(p)
 
     print('Load RNET')
-    net = ie.IENetwork.from_ir(*net_filenames(plugin, 'rnet'))
+    net = ie.IENetwork.from_ir(
+        *net_filenames(plugin, 'rnet', net_dir=args.model_dir)
+    )
     rnet_input_name = list(net.inputs.keys())[0]
-    rnet_output_name0 = net.outputs[0]
-    rnet_output_name1 = net.outputs[1]
+    # outputs = list(iter(net.outputs))
+    rnet_output_name0 = 'rnet/conv5-2/conv5-2/MatMul'
+    rnet_output_name1 = 'rnet/prob1'
     r_net = plugin.load(net)
 
     print('Load ONET')
 
-    net = ie.IENetwork.from_ir(*net_filenames(plugin, 'onet'))
+    net = ie.IENetwork.from_ir(
+        *net_filenames(plugin, 'onet', net_dir=args.model_dir)
+    )
     onet_input_name = list(net.inputs.keys())[0]
-    onet_batch_size = net.inputs[onet_input_name][0]
-    onet_output_name0 = net.outputs[0]
-    onet_output_name1 = net.outputs[1]
-    onet_output_name2 = net.outputs[2]
+    if isinstance(net.inputs[onet_input_name], list):
+        onet_batch_size = net.inputs[onet_input_name][0]
+    else:
+        onet_batch_size = net.inputs[onet_input_name].shape[0]
+
+    # outputs = list(iter(net.outputs))
+    onet_output_name0 = 'onet/conv6-2/conv6-2/MatMul'
+    onet_output_name1 = 'onet/conv6-3/conv6-3/MatMul'
+    onet_output_name2 = 'onet/prob1'
     print('ONET_BATCH_SIZE = {}'.format(onet_batch_size))
     o_net = plugin.load(net)
 
@@ -229,7 +253,8 @@ def main():
 
         net = ie.IENetwork.from_ir(model_file, weights_file)
         facenet_input = list(net.inputs.keys())[0]
-        facenet_output = net.outputs[0]
+        outputs = list(iter(net.outputs))
+        facenet_output = outputs[0]
         face_net = plugin.load(net)
 
         # Load classifier
@@ -382,6 +407,9 @@ def main():
         vs.stop()
         cv2.destroyAllWindows()
     print('Finished')
+
+    import sys
+    sys.exit(0)
 
 
 if __name__ == "__main__":

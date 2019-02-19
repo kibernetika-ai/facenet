@@ -5,7 +5,11 @@ import io
 import itertools
 import os
 from os import path
+import sys
 import time
+
+import matplotlib
+matplotlib.use('Agg')
 
 import matplotlib.pyplot as plt
 from mlboardclient.api import client
@@ -27,6 +31,13 @@ except ImportError:
     predict_pb2 = None
     predict_pb2_grpc = None
     tensor_util = None
+
+
+MAX_LENGTH = 67108864  # 64 MB
+opts = [
+    ('grpc.max_send_message_length', MAX_LENGTH),
+    ('grpc.max_receive_message_length', MAX_LENGTH)
+]
 
 
 def parse_arguments():
@@ -113,7 +124,7 @@ def get_stub(addr):
     if stub is not None:
         return stub
 
-    channel = grpc.insecure_channel(addr)
+    channel = grpc.insecure_channel(addr, options=opts)
 
     stub = predict_pb2_grpc.PredictServiceStub(channel)
     return stub
@@ -241,6 +252,11 @@ def upload_reports(mlboard, conf_matrix, roc):
     update_data(data, mlboard)
 
 
+def print_fun(s=''):
+    print(s)
+    sys.stdout.flush()
+
+
 if __name__ == '__main__':
     args = parse_arguments()
 
@@ -250,10 +266,10 @@ if __name__ == '__main__':
     paths, labels = facenet.get_image_paths_and_labels(dataset)
     class_names = [cls.name.replace('_', ' ') for cls in dataset]
 
-    print('Number of classes: %d' % len(dataset))
-    print('Number of images: %d' % len(paths))
+    print_fun('Number of classes: %d' % len(dataset))
+    print_fun('Number of images: %d' % len(paths))
 
-    print('Calculating features for images')
+    print_fun('Calculating features for images')
     nrof_images = len(paths)
 
     true_labels = []
@@ -267,7 +283,7 @@ if __name__ == '__main__':
     serv_addr = '%s:%s' % (args.host, args.port)
     for i, image_path in enumerate(paths):
         true_label = labels[i]
-        print('Processing {}...'.format(image_path))
+        print_fun('Processing {}...'.format(image_path))
 
         t = time.time()
         predicted = predict(image_path, mlboard, serv_addr, use_grpc)
@@ -280,26 +296,26 @@ if __name__ == '__main__':
 
     indices = [class_names.index(p) for p in predicted_labels]
 
-    print()
-    print('Total images: %d' % len(paths))
-    print('Total faces detected: %d' % len(predicted_labels))
-    print('Total time: %.3fs' % (time.time() - total_since))
-    print(
+    print_fun()
+    print_fun('Total images: %d' % len(paths))
+    print_fun('Total faces detected: %d' % len(predicted_labels))
+    print_fun('Total time: %.3fs' % (time.time() - total_since))
+    print_fun(
         'Average time per request: %.3fms'
         % (time_requests / float(len(paths)))
     )
-    print(
+    print_fun(
         'Average time per face: %.3fms'
         % (time_requests / float(len(true_labels)))
     )
-    print('Computing confusion matrix...')
+    print_fun('Computing confusion matrix...')
     conf_matrix = classifier_train.confusion(true_labels, indices, class_names)
 
-    print('Saving confusion matrix...')
+    print_fun('Saving confusion matrix...')
     with open(path.join(args.output_dir, 'confusion_matrix.html'), 'w') as f:
         f.write(conf_matrix)
 
-    print('Computing ROC curve...')
+        print_fun('Computing ROC curve...')
     thr, roc = plot_roc(
         class_names,
         np.array(indices),
@@ -311,4 +327,4 @@ if __name__ == '__main__':
         f.write(roc)
 
     upload_reports(mlboard, conf_matrix, roc)
-    print('Done.')
+    print_fun('Done.')
