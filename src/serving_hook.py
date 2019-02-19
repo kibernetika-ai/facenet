@@ -338,10 +338,10 @@ def postprocess(outputs, ctx, **kwargs):
     table = []
     text_labels = [l['label'] for l in labels]
     for i,b in enumerate(ctx.bounding_boxes):
-        x_min = max(0,b[0])
-        y_min = max(0,b[1])
-        x_max = min(ctx.frame.shape[1],b[2])
-        y_max = min(ctx.frame.shape[0],b[3])
+        x_min = int(max(0,b[0]))
+        y_min = int(max(0,b[1]))
+        x_max = int(min(ctx.frame.shape[1],b[2]))
+        y_max = int(min(ctx.frame.shape[0],b[3]))
         cim = ctx.frame[y_min:y_max,x_min:x_max]
         image_bytes = io.BytesIO()
         im = Image.fromarray(cim)
