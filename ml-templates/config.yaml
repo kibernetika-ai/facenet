@@ -142,6 +142,10 @@ spec:
         shape:
         - 1
         - -1
+      - name: table_output
+        type: string
+        shape:
+        - -1
       rawInput: true
       model: any
       template: "image"
