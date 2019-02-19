@@ -368,7 +368,7 @@ def postprocess(outputs, ctx, **kwargs):
     return {
         'output': image_bytes.getvalue(),
         'boxes': ctx.bounding_boxes,
-        'labels': np.array(text_labels, dtype=np.string_)
+        'labels': np.array(text_labels, dtype=np.string_),
         'table_output': json.dumps(table),
     }
 
