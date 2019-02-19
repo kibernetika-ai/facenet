@@ -137,8 +137,15 @@ spec:
       params:
       - name: input
         type: bytes
+      response:
+      - name: output
+        type: bytes
+        shape:
+        - 1
+        - -1
       rawInput: true
       model: any
+      template: "image"
       outFilter:
         - output
       outMimeType: "image/png"

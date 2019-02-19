@@ -249,6 +249,8 @@ def postprocess(outputs, ctx, **kwargs):
                 best_class_probabilities[i])
             )
 
+    #for i,b in enumerate(ctx.bounding_boxes):
+    #    cim = ctx.frame
     if not ctx.skip:
         ko.add_overlays(ctx.frame, ctx.bounding_boxes, 0, labels=labels)
 
