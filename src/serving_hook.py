@@ -352,7 +352,7 @@ def postprocess(outputs, ctx, **kwargs):
             {
                 'type': 'text',
                 'name': table_text[i],
-                'probability': float(scores_out[i]),
+                'prob': float(scores_out[i]),
                 'image': encoded
             }
         )
