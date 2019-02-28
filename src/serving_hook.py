@@ -1,18 +1,19 @@
+import base64
+import io
 import json
 import logging
 from os import path
 import pickle
 
 import cv2
-import io
 import numpy as np
 from openvino import inference_engine as ie
 from PIL import Image
 import six
 
-import camera_openvino as ko
 from align import detect_face
-import base64
+import camera_openvino as ko
+import openvino_nets as nets
 
 
 LOG = logging.getLogger(__name__)
@@ -65,46 +66,6 @@ def net_filenames(dir, net_name):
     return xml_name, bin_name
 
 
-class OpenVINONet(object):
-    output_list = None
-
-    def __init__(self, plugin, net):
-        self.exec_net = plugin.load(net)
-        if self.output_list:
-            self.outputs = self.output_list
-        else:
-            self.outputs = list(iter(net.outputs))
-        self.input = list(net.inputs.keys())[0]
-        LOG.info(self.outputs)
-
-    def __call__(self, img):
-        output = self.exec_net.infer({self.input: img})
-        out = [output[x] for x in self.outputs]
-        if len(out) == 1:
-            return out[0]
-        else:
-            return out
-
-
-class RNet(OpenVINONet):
-    output_list = [
-        'rnet/conv5-2/conv5-2/MatMul',
-        'rnet/prob1'
-    ]
-
-
-class ONet(OpenVINONet):
-    output_list = [
-        'onet/conv6-2/conv6-2/MatMul',
-        'onet/conv6-3/conv6-3/MatMul',
-        'onet/prob1'
-    ]
-
-
-class FaceDetect(OpenVINONet):
-    output_list = ['detection_out']
-
-
 def load_nets(**kwargs):
     global pnets
     global rnet
@@ -128,7 +89,7 @@ def load_nets(**kwargs):
             path.join(bin_path)
         )
         global face_detect
-        face_detect = FaceDetect(plugin, net)
+        face_detect = nets.FaceDetect(plugin, net)
     else:
         plugin = kwargs.get('plugin')
         model_dir = PARAMS.get('align_model_dir')
@@ -142,12 +103,12 @@ def load_nets(**kwargs):
 
         LOG.info('Load RNET')
         net = ie.IENetwork.from_ir(*net_filenames(model_dir, 'rnet'))
-        rnet_proxy = RNet(plugin, net)
+        rnet_proxy = nets.RNet(plugin, net)
 
         LOG.info('Load ONET')
 
         net = ie.IENetwork.from_ir(*net_filenames(model_dir, 'onet'))
-        onet_proxy = ONet(plugin, net)
+        onet_proxy = nets.ONet(plugin, net)
         onet_input_name = list(net.inputs.keys())[0]
         if isinstance(net.inputs[onet_input_name], list):
             onet_batch_size = net.inputs[onet_input_name][0]

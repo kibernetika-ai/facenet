@@ -10,8 +10,8 @@ from openvino import inference_engine as ie
 from scipy import misc
 import six
 
-import align.detect_face as detect_face
-import facenet
+import openvino_nets as nets
+import utils
 
 
 logging.basicConfig(level=logging.INFO)
@@ -28,21 +28,16 @@ def get_parser():
         help='Image',
     )
     parser.add_argument(
-        '--model-dir',
+        '--face-detection-path',
         default=None,
-        help='Base models dir',
+        help='Path to face-detection-retail openvino model',
+        required=True,
     )
     parser.add_argument(
-        '--factor',
+        '--threshold',
         type=float,
-        default=0.709,
-        help='Factor',
-    )
-    parser.add_argument(
-        '--resolutions',
-        type=str,
-        default="26x37,37x52,52x74,145x206",
-        help='PNET resolutions',
+        default=0.5,
+        help='Threshold for detecting faces',
     )
     parser.add_argument(
         '--classifier',
@@ -66,16 +61,6 @@ def get_parser():
         default='facenet.xml',
     )
     return parser
-
-
-def get_size(scale):
-    t = scale.split('x')
-    return int(t[0]), int(t[1])
-
-
-def imresample(img, h, w):
-    im_data = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)  # @UndefinedVariable
-    return im_data
 
 
 def add_overlays(frame, boxes, frame_rate, labels=None):
@@ -105,15 +90,6 @@ def add_overlays(frame, boxes, frame_rate, labels=None):
             )
 
 
-def parse_resolutions(v):
-    res = []
-    for r in v.split(','):
-        hw = r.split('x')
-        if len(hw) == 2:
-            res.append((int(hw[0]), int(hw[1])))
-    return res
-
-
 def get_images(image, bounding_boxes):
     face_crop_size = 160
     face_crop_margin = 32
@@ -139,55 +115,24 @@ def get_images(image, bounding_boxes):
             bb[3] = np.minimum(det[3] + face_crop_margin / 2, img_size[0])
             cropped = image[bb[1]:bb[3], bb[0]:bb[2], :]
             scaled = misc.imresize(cropped, (face_crop_size, face_crop_size), interp='bilinear')
-            images.append(facenet.prewhiten(scaled))
+            images.append(utils.prewhiten(scaled))
 
     return images
 
 
-class PNetHandler(object):
-    def __init__(self, plugin, h, w, net_dir=None):
-        net = ie.IENetwork.from_ir(*net_filenames(
-            plugin, 'pnet_{}x{}'.format(h, w), net_dir=net_dir)
-        )
-        self.input_name = list(net.inputs.keys())[0]
-        LOG.info(net.outputs)
-        outputs = net.outputs
-        if isinstance(outputs, dict):
-            self.output_name0 = 'pnet/conv4-2/Conv2D'
-            self.output_name1 = 'pnet/prob1'
-        elif isinstance(outputs, list):
-            self.output_name0 = outputs[0]
-            self.output_name1 = outputs[1]
-        self.exec_net = plugin.load(net)
-        self.h = h
-        self.w = w
+def openvino_detect(face_detect, frame, threshold):
+    inference_frame = cv2.resize(frame, face_detect.input_size, interpolation=cv2.INTER_AREA)
+    inference_frame = np.transpose(inference_frame, [2, 0, 1]).reshape(*face_detect.input_shape)
+    outputs = face_detect(inference_frame)
+    outputs = outputs.reshape(-1, 7)
+    bboxes_raw = outputs[outputs[:, 2] > threshold]
+    bounding_boxes = bboxes_raw[:, 3:7]
+    bounding_boxes[:, 0] = bounding_boxes[:, 0] * frame.shape[1]
+    bounding_boxes[:, 2] = bounding_boxes[:, 2] * frame.shape[1]
+    bounding_boxes[:, 1] = bounding_boxes[:, 1] * frame.shape[0]
+    bounding_boxes[:, 3] = bounding_boxes[:, 3] * frame.shape[0]
 
-    def destroy(self):
-        pass
-
-    def proxy(self):
-        def _exec(img):
-            # Channel first
-            img = img.transpose([0, 3, 1, 2])
-            output = self.exec_net.infer({self.input_name: img})
-            output1 = output[self.output_name0]
-            output2 = output[self.output_name1]
-            # Channel last
-            output1 = output1.transpose([0, 3, 2, 1])
-            output2 = output2.transpose([0, 3, 2, 1])
-            return output1, output2
-
-        return _exec, self.h, self.w
-
-
-def net_filenames(plugin, net_name, net_dir=None):
-    if not net_dir:
-        device = plugin.device.lower()
-        net_dir = 'openvino-{}'.format(device)
-    base_name = '{}/{}'.format(net_dir, net_name)
-    xml_name = base_name + '.xml'
-    bin_name = base_name + '.bin'
-    return xml_name, bin_name
+    return bounding_boxes
 
 
 def main():
@@ -210,46 +155,17 @@ def main():
             print("LOAD extension from {}".format(ext))
             plugin.add_cpu_extension(ext)
 
-    print('Load PNET')
-
-    pnets = []
-    for r in parse_resolutions(args.resolutions):
-        p = PNetHandler(plugin, r[0], r[1], net_dir=args.model_dir)
-        pnets.append(p)
-
-    print('Load RNET')
-    net = ie.IENetwork.from_ir(
-        *net_filenames(plugin, 'rnet', net_dir=args.model_dir)
-    )
-    rnet_input_name = list(net.inputs.keys())[0]
-    # outputs = list(iter(net.outputs))
-    rnet_output_name0 = 'rnet/conv5-2/conv5-2/MatMul'
-    rnet_output_name1 = 'rnet/prob1'
-    r_net = plugin.load(net)
-
-    print('Load ONET')
-
-    net = ie.IENetwork.from_ir(
-        *net_filenames(plugin, 'onet', net_dir=args.model_dir)
-    )
-    onet_input_name = list(net.inputs.keys())[0]
-    if isinstance(net.inputs[onet_input_name], list):
-        onet_batch_size = net.inputs[onet_input_name][0]
-    else:
-        onet_batch_size = net.inputs[onet_input_name].shape[0]
-
-    # outputs = list(iter(net.outputs))
-    onet_output_name0 = 'onet/conv6-2/conv6-2/MatMul'
-    onet_output_name1 = 'onet/conv6-3/conv6-3/MatMul'
-    onet_output_name2 = 'onet/prob1'
-    print('ONET_BATCH_SIZE = {}'.format(onet_batch_size))
-    o_net = plugin.load(net)
+    print('Load FACE DETECTION')
+    face_path = args.face_detection_path
+    weights_file = face_path[:face_path.rfind('.')] + '.bin'
+    net = ie.IENetwork.from_ir(face_path, weights_file)
+    face_detect = nets.FaceDetect(plugin, net)
 
     if use_classifier:
         print('Load FACENET')
 
         model_file = args.graph
-        weights_file = model_file[:-3] + 'bin'
+        weights_file = model_file[:model_file.rfind('.')] + '.bin'
 
         net = ie.IENetwork.from_ir(model_file, weights_file)
         facenet_input = list(net.inputs.keys())[0]
@@ -264,41 +180,19 @@ def main():
                 opts['encoding'] = 'latin1'
             (model, class_names) = pickle.load(**opts)
 
-    minsize = 20  # minimum size of face
-    threshold = [0.6, 0.7, 0.7]  # three steps's threshold
-    factor = 0.709  # scale factor
-
     # video_capture = cv2.VideoCapture(0)
     if args.image is None:
         from imutils.video import VideoStream
-        from imutils.video import FPS
         vs = VideoStream(
             usePiCamera=args.camera_device == "PI",
-            # resolution=(640, 480),
+            resolution=(640, 480),
             # framerate=24
         ).start()
-        time.sleep(1)
-        fps = FPS().start()
+        # time.sleep(1)
 
     bounding_boxes = []
     labels = []
 
-    pnets_proxy = []
-    for p in pnets:
-        pnets_proxy.append(p.proxy())
-
-    def _rnet_proxy(img):
-        output = r_net.infer({rnet_input_name: img})
-        return output[rnet_output_name0], output[rnet_output_name1]
-
-    def _onet_proxy(img):
-        # img = img.reshape([1, 3, 48, 48])
-        output = o_net.infer({onet_input_name: img})
-        return output[onet_output_name0], output[onet_output_name1], output[onet_output_name2]
-
-    pnet, rnet, onet = detect_face.create_openvino_mtcnn(
-        pnets_proxy, _rnet_proxy, _onet_proxy, onet_batch_size
-    )
     try:
         while True:
             # Capture frame-by-frame
@@ -309,25 +203,18 @@ def main():
             else:
                 frame = cv2.imread(args.image).astype(np.float32)
 
-            # h = 400
-            # w = int(round(frame.shape[1] / (frame.shape[0] / float(h))))
-            h = 480
-            w = 640
-            if (frame.shape[1] != w) or (frame.shape[0] != h):
-                frame = cv2.resize(
-                    frame, (w, h), interpolation=cv2.INTER_AREA
-                )
-
+            frame = utils.image_resize(frame, height=480)
             # BGR -> RGB
-            rgb_frame = frame[:, :, ::-1]
+            # rgb_frame = frame[:, :, ::-1]
             # rgb_frame = frame
             # print("Frame {}".format(frame.shape))
 
             if (frame_count % frame_interval) == 0:
                 # t = time.time()
-                bounding_boxes, _ = detect_face.detect_face_openvino(
-                    rgb_frame, pnet, rnet, onet, threshold
-                )
+                bounding_boxes = openvino_detect(face_detect, frame, args.threshold)
+                # bounding_boxes, _ = detect_face.detect_face_openvino(
+                #     rgb_frame, pnet, rnet, onet, threshold
+                # )
                 # d = (time.time() - t) * 1000
                 # LOG.info('recognition: %.3fms' % d)
                 # Check our current fps
@@ -338,7 +225,7 @@ def main():
                     frame_count = 0
 
                 if use_classifier:
-                    imgs = get_images(rgb_frame, bounding_boxes)
+                    imgs = get_images(frame, bounding_boxes)
                     labels = []
                     # t = time.time()
                     for img_idx, img in enumerate(imgs):
@@ -381,7 +268,7 @@ def main():
                                 i,
                                 class_names[best_class_indices[i]],
                                 best_class_probabilities[i])
-                                  )
+                            )
                     # d = (time.time() - t) * 1000
                     # LOG.info('facenet: %.3fms' % d)
 
@@ -394,7 +281,9 @@ def main():
                 print(bounding_boxes)
                 break
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            key = cv2.waitKey(1)
+            # Wait 'q' or Esc
+            if key == ord('q') or key == 27:
                 break
 
     except (KeyboardInterrupt, SystemExit) as e:
@@ -403,8 +292,8 @@ def main():
     # When everything is done, release the capture
     # video_capture.release()
     if args.image is None:
-        fps.stop()
         vs.stop()
+        vs.stream.release()
         cv2.destroyAllWindows()
     print('Finished')
 

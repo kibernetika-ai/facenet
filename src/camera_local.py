@@ -10,6 +10,7 @@ import six
 from scipy import misc
 
 import facenet
+import utils
 
 
 def get_parser():
@@ -24,6 +25,11 @@ def get_parser():
     parser.add_argument(
         '--image',
         help='Image',
+    )
+    parser.add_argument(
+        '--align-dir',
+        help='Path to the tensorflow models align dir',
+        required=True,
     )
     parser.add_argument(
         '--classifier',
@@ -132,7 +138,7 @@ def main():
     labels = []
 
     with tf.Session() as sess:
-        pnet, rnet, onet = detect_face.create_mtcnn(sess, 'align')
+        pnet, rnet, onet = detect_face.create_mtcnn(sess, args.align_dir)
         if use_classifier:
             # Load classifier
             with open(args.classifier, 'rb') as f:
@@ -153,7 +159,8 @@ def main():
                     _, frame = video_capture.read()
                 else:
                     frame = cv2.imread(args.image)
-                frame = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_AREA)
+                frame = utils.image_resize(frame, height=480)
+                # frame = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_AREA)
                 # BGR -> RGB
                 rgb_frame = frame[:, :, ::-1]
 
