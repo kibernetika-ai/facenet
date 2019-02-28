@@ -188,7 +188,8 @@ def main():
             resolution=(640, 480),
             # framerate=24
         ).start()
-        # time.sleep(1)
+        if args.camera_device == "PI":
+            time.sleep(1)
 
     bounding_boxes = []
     labels = []
@@ -203,6 +204,9 @@ def main():
             else:
                 frame = cv2.imread(args.image).astype(np.float32)
 
+            if frame is None:
+                print("frame is None. Possibly camera or display does not work")
+                break
             frame = utils.image_resize(frame, height=480)
             # BGR -> RGB
             # rgb_frame = frame[:, :, ::-1]
@@ -293,7 +297,8 @@ def main():
     # video_capture.release()
     if args.image is None:
         vs.stop()
-        vs.stream.release()
+        if hasattr(vs, 'stream') and hasattr(vs.stream, 'release'):
+            vs.stream.release()
         cv2.destroyAllWindows()
     print('Finished')
 
