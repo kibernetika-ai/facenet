@@ -261,6 +261,8 @@ def main(args):
         emb_array[start_index:end_index, :] = list(outputs.values())[0]
 
     classifier_filename_exp = os.path.expanduser(args.classifier)
+    average_time = total_time / embeddings_size * 1000
+    print('Average time: %.3fms' % average_time)
 
     if args.mode == 'TRAIN':
         # Train classifier
@@ -277,6 +279,7 @@ def main(args):
         with open(classifier_filename_exp, 'wb') as outfile:
             pickle.dump((model, class_names), outfile, protocol=2)
         print('Saved classifier model to file "%s"' % classifier_filename_exp)
+        update_data({'average_time': '%.3fms' % average_time}, use_mlboard, mlboard)
 
     elif args.mode == 'CLASSIFY':
         # Classify images
@@ -296,13 +299,12 @@ def main(args):
         accuracy = np.mean(np.equal(best_class_indices, labels))
 
         rpt = confusion(labels, best_class_indices, class_names)
-        average_time = total_time / embeddings_size * 1000
         data = {
             'accuracy': accuracy,
             '#documents.confusion_matrix.html': rpt,
             'average_time': '%.3fms' % average_time
         }
-        print('Average time: %.3fms' % average_time)
+
         update_data(data, use_mlboard, mlboard)
         print('Accuracy: %.3f' % accuracy)
         if args.upload_model and accuracy >= args.upload_threshold:
