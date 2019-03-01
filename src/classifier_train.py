@@ -34,6 +34,7 @@ from os import path
 import pickle
 import sys
 import shutil
+import time
 
 import numpy as np
 from sklearn import svm
@@ -179,6 +180,9 @@ def main(args):
 
     # Run forward pass to calculate embeddings
     print('Calculating features for images')
+
+    total_time = 0.
+
     nrof_images = len(paths)
     nrof_batches_per_epoch = int(math.ceil(1.0 * nrof_images / args.batch_size))
     embeddings_size = nrof_images
@@ -251,7 +255,9 @@ def main(args):
         else:
             raise RuntimeError('Driver %s currently not supported' % serving.driver_name)
 
+        t = time.time()
         outputs = serving.predict(feed_dict)
+        total_time += time.time() - t
         emb_array[start_index:end_index, :] = list(outputs.values())[0]
 
     classifier_filename_exp = os.path.expanduser(args.classifier)
@@ -290,7 +296,14 @@ def main(args):
         accuracy = np.mean(np.equal(best_class_indices, labels))
 
         rpt = confusion(labels, best_class_indices, class_names)
-        update_data({'accuracy': accuracy,'#documents.confusion_matrix.html':rpt}, use_mlboard, mlboard)
+        average_time = total_time / embeddings_size * 1000
+        data = {
+            'accuracy': accuracy,
+            '#documents.confusion_matrix.html': rpt,
+            'average_time': '%.3fms' % average_time
+        }
+        print('Average time: %.3fms' % average_time)
+        update_data(data, use_mlboard, mlboard)
         print('Accuracy: %.3f' % accuracy)
         if args.upload_model and accuracy >= args.upload_threshold:
             timestamp = datetime.datetime.now().strftime('%s')
