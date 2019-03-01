@@ -1,11 +1,11 @@
 name: pipeline
 resources:
 - workDir: $SRC_DIR
-  command: python pipeline.py {{ .upload_threshold }} {{ .driver }}
+  command: python pipeline.py {{ .upload_threshold }} {{ .driver }} --movidius {{ .movidius }}
   default_volume_mapping: true
   images:
-    cpu: kuberlab/tensorflow:cpu-36-1.7.0-full
-    gpu: kuberlab/tensorflow:gpu-36-1.7.0-full
+    cpu: kuberlab/tensorflow:cpu-36-1.9.0-full
+    gpu: kuberlab/tensorflow:gpu-36-1.9.0-full
   name: worker
   replicas: 1
   resources:

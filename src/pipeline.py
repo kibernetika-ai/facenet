@@ -46,6 +46,7 @@ def get_parser():
     parser.add_argument('driver')
     parser.add_argument('--convert', type=utils.boolean_string, default=False)
     parser.add_argument('--push-model', type=utils.boolean_string, default=False)
+    parser.add_argument('--movidius', type=utils.boolean_string, default=False)
 
     return parser
 
@@ -54,13 +55,17 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
+    device = "MYRIAD" if args.movidius else "CPU"
+
     override_args = {
         'validate-classifier': {
             'upload-threshold': args.upload_threshold,
             'driver': args.driver,
+            'device': device,
         },
         'train-classifier': {
             'driver': args.driver,
+            'device': device,
         }
     }
 
@@ -81,15 +86,14 @@ def main():
     for task in run_tasks:
         t = app.tasks.get(task)
         if faces_set is not None:
-            revs = t.config.get('datasetRevisions',[])
-            _revs = []
-            for r in revs:
-                if r['volumeName'] != 'faces':
-                    _revs.append(r)
-            _revs.append({'revision': faces_set,'volumeName': 'faces'})
-            t.config['datasetRevisions'] = _revs
+            t.set_dataset_revision('faces', faces_set)
+
         if t.name in override_args and override_args[t.name]:
             override_task_arguments(t, override_args[t.name])
+
+        if args.movidius and t.name in ['train-classifier', 'validate-classifier']:
+            LOG.info('Set schedule task %s on movidius' % t.name)
+            t.config['resources'][0]['nodes'] = 'knode:movidius'
 
         LOG.info("Start task %s..." % t.name)
         started = t.start()
@@ -116,9 +120,10 @@ def main():
             "Task %s-%s completed with status %s."
             % (completed.name, completed.build, completed.status)
         )
-        if task=='align-images':
+        if task == 'align-images':
             faces_set = completed.exec_info['push_version']
-            LOG.info('Setup new faceset: {}'.format(faces_set))
+            LOG.info('Setup new faces set: {}'.format(faces_set))
+
     LOG.info("Workflow completed with status SUCCESS")
 
 

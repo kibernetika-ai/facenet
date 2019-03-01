@@ -10,3 +10,8 @@
   options:
     - openvino
     - tf
+- name: movidius
+  type: bool
+  value: false
+  width: 100
+  label: Use movidius to train classifier (required "movidius" node)

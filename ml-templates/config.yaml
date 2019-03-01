@@ -14,8 +14,8 @@ spec:
         $FACES_DIR /tmp/faces --image_size 160  --margin 32 --model_dir $FACENET_DIR --push {{ .faces.value }}
       default_volume_mapping: true
       images:
-        cpu: kuberlab/tensorflow:cpu-36-1.7.0-full
-        gpu: kuberlab/tensorflow:gpu-36-1.7.0-full
+        cpu: kuberlab/tensorflow:cpu-36-1.9.0-full
+        gpu: kuberlab/tensorflow:gpu-36-1.9.0-full
       name: worker
       replicas: 1
       resources:
@@ -68,8 +68,8 @@ spec:
     - command: python pipeline.py 0.9 openvino
       default_volume_mapping: true
       images:
-        cpu: kuberlab/tensorflow:cpu-36-1.7.0-full
-        gpu: kuberlab/tensorflow:gpu-36-1.7.0-full
+        cpu: kuberlab/tensorflow:cpu-36-1.9.0-full
+        gpu: kuberlab/tensorflow:gpu-36-1.9.0-full
       name: worker
       replicas: 1
       resources:
