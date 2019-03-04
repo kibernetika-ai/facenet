@@ -173,24 +173,14 @@ def preprocess(inputs, ctx, **kwargs):
         net_loaded = True
 
     image = inputs.get('input')
-    image_pil = None
     if image is None:
         raise RuntimeError('Missing "input" key in inputs. Provide an image in "input" key')
 
     if len(image.shape) == 0:
         image = [image.tolist()]
 
-    if isinstance(image[0], (six.string_types, bytes)):
-        image = Image.open(io.BytesIO(image[0]))
-
-        image_pil = image.convert('RGB')
-        image = np.array(image_pil)
-
-    if image.shape[2] == 4:
-        # Convert RGBA -> RGB
-        rgba_image = Image.fromarray(image)
-        image_pil = rgba_image.convert('RGB')
-        image = np.array(image_pil)
+    image = cv2.imdecode(np.fromstring(image[0], np.uint8), cv2.IMREAD_COLOR)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     use_tf = PARAMS['use_tf']
     use_face = PARAMS['use_face_detection']
@@ -204,11 +194,8 @@ def preprocess(inputs, ctx, **kwargs):
             frame = image_resize(image, width=width)
             scaled = (float(width) / image.shape[1], float(height) / image.shape[0])
     elif use_face:
-        if image_pil is None:
-            image_pil = Image.fromarray(image)
-
-        data = image_pil.resize((300, 300), Image.ANTIALIAS)
-        data = np.array(data).transpose([2, 0, 1]).reshape(1, 3, 300, 300)
+        data = cv2.resize(image, (300, 300), interpolation=cv2.INTER_AREA)
+        data = data.transpose([2, 0, 1]).reshape(1, 3, 300, 300)
         # convert to BGR
         data = data[:, ::-1, :, :]
         frame = image
@@ -229,10 +216,10 @@ def preprocess(inputs, ctx, **kwargs):
         # class_id, label, confidence, x_min, y_min, x_max, y_max
         # Select boxes where confidence > factor
         bboxes_raw = raw[raw[:, 2] > PARAMS['threshold'][0]]
-        bboxes_raw[:, 3] = bboxes_raw[:, 3] * image_pil.width
-        bboxes_raw[:, 5] = bboxes_raw[:, 5] * image_pil.width
-        bboxes_raw[:, 4] = bboxes_raw[:, 4] * image_pil.height
-        bboxes_raw[:, 6] = bboxes_raw[:, 6] * image_pil.height
+        bboxes_raw[:, 3] = bboxes_raw[:, 3] * image.shape[1]
+        bboxes_raw[:, 5] = bboxes_raw[:, 5] * image.shape[1]
+        bboxes_raw[:, 4] = bboxes_raw[:, 4] * image.shape[0]
+        bboxes_raw[:, 6] = bboxes_raw[:, 6] * image.shape[0]
 
         bounding_boxes = np.zeros([len(bboxes_raw), 5])
 
@@ -301,17 +288,20 @@ def postprocess(outputs, ctx, **kwargs):
 
     table = []
     text_labels = [l['label'] for l in labels]
-    for i,b in enumerate(ctx.bounding_boxes):
+    for i, b in enumerate(ctx.bounding_boxes):
         x_min = int(max(0,b[0]))
         y_min = int(max(0,b[1]))
-        x_max = int(min(ctx.frame.shape[1],b[2]))
-        y_max = int(min(ctx.frame.shape[0],b[3]))
-        cim = ctx.frame[y_min:y_max,x_min:x_max]
-        image_bytes = io.BytesIO()
-        im = Image.fromarray(cim)
-        im.save(image_bytes, format='PNG')
+        x_max = int(min(ctx.frame.shape[1], b[2]))
+        y_max = int(min(ctx.frame.shape[0], b[3]))
+        cim = ctx.frame[y_min:y_max, x_min:x_max]
+        # image_bytes = io.BytesIO()
+        cim = cv2.cvtColor(cim, cv2.COLOR_RGB2BGR)
+        image_bytes = cv2.imencode(".jpg", cim, params=[cv2.IMWRITE_JPEG_QUALITY, 95])[1].tostring()
 
-        encoded = base64.encodebytes(image_bytes.getvalue()).decode()
+        # im = Image.fromarray(cim)
+        # im.save(image_bytes, format='JPEG')
+
+        encoded = base64.encodebytes(image_bytes).decode()
         table.append(
             {
                 'type': 'text',
@@ -323,14 +313,15 @@ def postprocess(outputs, ctx, **kwargs):
     if not ctx.skip:
         ko.add_overlays(ctx.frame, ctx.bounding_boxes, 0, labels=labels)
 
-    image_bytes = io.BytesIO()
+    # image_bytes = io.BytesIO()
 
-    im = Image.fromarray(ctx.frame)
-    im.save(image_bytes, format='PNG')
-
+    ctx.frame = cv2.cvtColor(ctx.frame, cv2.COLOR_RGB2BGR)
+    image_bytes = cv2.imencode(".jpg", ctx.frame, params=[cv2.IMWRITE_JPEG_QUALITY, 95])[1].tostring()
+    # im = Image.fromarray(ctx.frame)
+    # im.save(image_bytes, format='JPEG')
 
     return {
-        'output': image_bytes.getvalue(),
+        'output': image_bytes,
         'boxes': ctx.bounding_boxes,
         'labels': np.array(text_labels, dtype=np.string_),
         'table_output': json.dumps(table),
