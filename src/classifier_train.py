@@ -310,6 +310,10 @@ def main(args):
         if args.upload_model and accuracy >= args.upload_threshold:
             timestamp = datetime.datetime.now().strftime('%s')
             model_name = 'facenet-classifier'
+
+            if args.device == 'MYRIAD':
+                model_name = model_name + "-movidius"
+
             version = '1.0.0-%s-%s' % (args.driver, timestamp)
 
             print('Uploading model as %s:%s' % (model_name, version))
