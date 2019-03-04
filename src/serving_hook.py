@@ -40,6 +40,9 @@ class_names = None
 
 
 def boolean_string(s):
+    if isinstance(s, bool):
+        return s
+
     s = s.lower()
     if s not in {'false', 'true'}:
         raise ValueError('Not a valid boolean string')
