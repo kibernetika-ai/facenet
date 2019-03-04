@@ -84,9 +84,9 @@ def add_overlays(frame, boxes, frame_rate, labels=None):
         for l in labels:
             cv2.putText(
                 frame, l['label'], (l['left'], l['top'] - 5),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8,
                 (0, 255, 0),
-                thickness=1, lineType=2
+                thickness=1, lineType=cv2.LINE_AA
             )
 
 
