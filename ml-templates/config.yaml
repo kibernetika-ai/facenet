@@ -122,16 +122,21 @@ spec:
     displayName: OpenVino Serving
     images:
       cpu: "kuberlab/serving:latest-openvino"
-    command: "kuberlab-serving --driver openvino --model-path $FACENET_DIR/facenet.xml --hooks serving_hook.py -o classifier=$MODEL_DIR/classifier.pkl -o flexible_batch_size=True -o resolutions=14x19,19x27,26x37,37x52,52x74,73x104,103x146,145x206,205x290 -o use_tf=true -o tf_path=$FACENET_DIR"
+      gpu: "kuberlab/serving:latest-openvino-gpu"
+    command: >-
+      kuberlab-serving --driver openvino --model-path $FACENET_DIR/facenet.xml --hooks serving_hook.py
+      -o classifier=$MODEL_DIR/classifier.pkl -o flexible_batch_size=True
+      -o use_face_detection=true -o face_detection_path=$FACE_DETECTION_DIR/face-detection.xml
+      -o device=CPU
     resources:
       accelerators:
         gpu: 0
       requests:
-        cpu: 100m
-        memory: 125Mi
+        cpu: 200m
+        memory: 256M
       limits:
-        cpu: 2000m
-        memory: 1Gi
+        cpu: 4000m
+        memory: 4Gi
     spec:
       params:
       - name: input
@@ -151,22 +156,25 @@ spec:
       template: "image"
       outFilter:
         - output
-      outMimeType: "image/png"
+      outMimeType: "image/jpeg"
     workDir: $SRC_DIR
     sources:
     - gitRepo:
         repository: {{ gitRepo .src.value }}
         accountId: '{{ .src.accountId }}'
         revision: '{{ .src.revision }}'
-      isLibDir: false
       name: src
       subPath: {{ gitSubPath .src.value }}/src
-    - isLibDir: false
-      name: facenet
+    - name: facenet
       model:
         workspace: {{ .model.workspace }}
         model: {{ .model.value }}
         version: {{ .model.version }}
+    - name: face-detection
+      model:
+        workspace: kuberlab-demo
+        model: openvino-face-detection
+        version: 1.4.0-cpu
     ports:
     - port: 9000
       targetPort: 9000
