@@ -103,7 +103,7 @@ spec:
   - default_volume_mapping: true
     displayName: Jupyter
     images:
-      cpu: kuberlab/tensorflow:cpu-36-1.7.0-full
+      cpu: kuberlab/tensorflow:cpu-36-1.9.0-full
     name: jupyter
     ports:
     - name: http
