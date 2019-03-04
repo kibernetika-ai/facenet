@@ -4,6 +4,7 @@
 ##
 import argparse
 import logging
+import os
 import re
 import sys
 
@@ -51,6 +52,29 @@ def get_parser():
     return parser
 
 
+def get_facenet_version(mlboard):
+    app = mlboard.apps.get()
+    self_task = os.environ.get('TASK_NAME')
+    self_build = os.environ.get('BUILD_ID')
+    if not self_build:
+        return None
+
+    current_task = mlboard.tasks.get(app.name, self_task, self_build)
+    current_task_cfg = mlboard.tasks.get_for_revision(
+        app.name, self_task, current_task.git_revision
+    )
+
+    model_revisions = current_task_cfg.config.get('modelRevisions')
+    if not model_revisions:
+        return None
+
+    for rev in model_revisions:
+        if rev['volumeName'] == 'facenet':
+            return rev['revision']
+
+    return None
+
+
 def main():
     parser = get_parser()
     args = parser.parse_args()
@@ -81,12 +105,18 @@ def main():
         override_args['validate-classifier']['model'] = '$FACENET_DIR/facenet.xml'
 
     app = mlboard.apps.get()
+    facenet_revision = get_facenet_version(mlboard)
+
+    LOG.info("=" * 50)
+    LOG.info("Use facenet revision %s" % facenet_revision)
+    LOG.info("=" * 50)
 
     faces_set = None
     for task in run_tasks:
         t = app.tasks.get(task)
         if faces_set is not None:
             t.set_dataset_revision('faces', faces_set)
+            t.set_dataset_revision('facenet', facenet_revision)
 
         if t.name in override_args and override_args[t.name]:
             override_task_arguments(t, override_args[t.name])
