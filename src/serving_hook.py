@@ -1,5 +1,4 @@
 import base64
-import io
 import json
 import logging
 from os import path
@@ -8,7 +7,6 @@ import pickle
 import cv2
 import numpy as np
 from openvino import inference_engine as ie
-from PIL import Image
 import six
 
 from align import detect_face
