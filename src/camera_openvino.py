@@ -170,7 +170,7 @@ def main():
         facenet_input = list(net.inputs.keys())[0]
         outputs = list(iter(net.outputs))
         facenet_output = outputs[0]
-        face_net = plugin.load(net)
+        face_net = plugin.load(net, num_requests=2)
 
         # Load classifier
         with open(args.classifier, 'rb') as f:
@@ -193,29 +193,46 @@ def main():
     bounding_boxes = []
     labels = []
 
+    cur_request = 0
+    next_request = 1
+
+    def get_frame():
+        if args.image is None:
+            new_frame = vs.read()
+            if isinstance(new_frame, tuple):
+                new_frame = new_frame[1]
+        else:
+            new_frame = cv2.imread(args.image).astype(np.float32)
+
+        if new_frame is None:
+            print("frame is None. Possibly camera or display does not work")
+            return None
+
+        if new_frame.shape[0] > 480:
+            new_frame = utils.image_resize(new_frame, height=480)
+
+        return new_frame
+
+    frame = get_frame()
+    if frame is None:
+        vs.stop()
+        if hasattr(vs, 'stream') and hasattr(vs.stream, 'release'):
+            vs.stream.release()
+        return
+
     try:
         while True:
             # Capture frame-by-frame
-            if args.image is None:
-                frame = vs.read()
-                if isinstance(frame, tuple):
-                    frame = frame[1]
-            else:
-                frame = cv2.imread(args.image).astype(np.float32)
-
-            if frame is None:
-                print("frame is None. Possibly camera or display does not work")
+            next_frame = get_frame()
+            if next_frame is None:
                 break
-
-            if frame.shape[0] > 480:
-                frame = utils.image_resize(frame, height=480)
             # BGR -> RGB
             # rgb_frame = frame[:, :, ::-1]
             # rgb_frame = frame
 
             if (frame_count % frame_interval) == 0:
                 # t = time.time()
-                bounding_boxes = openvino_detect(face_detect, frame, args.threshold)
+                bounding_boxes = openvino_detect(face_detect, next_frame, args.threshold)
                 # d = (time.time() - t) * 1000
                 # LOG.info('recognition: %.3fms' % d)
                 # Check our current fps
@@ -227,15 +244,21 @@ def main():
 
                 if use_classifier:
                     # t = time.time()
-                    imgs = get_images(frame, bounding_boxes)
+                    imgs = get_images(next_frame, bounding_boxes)
                     labels = []
                     for img_idx, img in enumerate(imgs):
                         #img = img.astype(np.float32)
 
                         # Infer
+                        # t = time.time()
                         img = img.transpose([2, 0, 1]).reshape([1, 3, 160, 160])
-                        output = face_net.infer({facenet_input: img})
-                        output = output[facenet_output]
+                        face_net.start_async(request_id=next_request, inputs={facenet_input: img})
+
+                    if face_net.requests[cur_request].wait(-1) == 0:
+                        output = face_net.requests[cur_request].outputs[facenet_output]
+                        # output = face_net.infer({facenet_input: img})
+                        # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
+                        # output = output[facenet_output]
                         try:
                             output = output.reshape(1, model.shape_fit_[1])
                             predictions = model.predict_proba(output)
@@ -281,9 +304,12 @@ def main():
                 print(bounding_boxes)
                 break
 
+            next_request, cur_request = cur_request, next_request
+            frame = next_frame
+
             key = cv2.waitKey(1)
-            # Wait 'q' or Esc
-            if key == ord('q') or key == 27:
+            # Wait 'q' or Esc or 'q' in russian layout
+            if key in [ord('q'), 202, 27]:
                 break
 
     except (KeyboardInterrupt, SystemExit) as e:

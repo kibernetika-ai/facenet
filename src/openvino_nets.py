@@ -45,3 +45,6 @@ class ONet(OpenVINONet):
 class FaceDetect(OpenVINONet):
     output_list = ['detection_out']
 
+
+class FaceNet(OpenVINONet):
+    output_list = ['normalize']
