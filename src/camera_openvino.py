@@ -7,7 +7,6 @@ import time
 import cv2
 import numpy as np
 from openvino import inference_engine as ie
-from scipy import misc
 import six
 
 import openvino_nets as nets
@@ -114,7 +113,7 @@ def get_images(image, bounding_boxes):
             bb[2] = np.minimum(det[2] + face_crop_margin / 2, img_size[1])
             bb[3] = np.minimum(det[3] + face_crop_margin / 2, img_size[0])
             cropped = image[bb[1]:bb[3], bb[0]:bb[2], :]
-            scaled = misc.imresize(cropped, (face_crop_size, face_crop_size), interp='bilinear')
+            scaled = cv2.resize(cropped, (face_crop_size, face_crop_size), interpolation=cv2.INTER_AREA)
             images.append(utils.prewhiten(scaled))
 
     return images
@@ -207,18 +206,16 @@ def main():
             if frame is None:
                 print("frame is None. Possibly camera or display does not work")
                 break
-            frame = utils.image_resize(frame, height=480)
+
+            if frame.shape[0] > 480:
+                frame = utils.image_resize(frame, height=480)
             # BGR -> RGB
             # rgb_frame = frame[:, :, ::-1]
             # rgb_frame = frame
-            # print("Frame {}".format(frame.shape))
 
             if (frame_count % frame_interval) == 0:
                 # t = time.time()
                 bounding_boxes = openvino_detect(face_detect, frame, args.threshold)
-                # bounding_boxes, _ = detect_face.detect_face_openvino(
-                #     rgb_frame, pnet, rnet, onet, threshold
-                # )
                 # d = (time.time() - t) * 1000
                 # LOG.info('recognition: %.3fms' % d)
                 # Check our current fps
@@ -229,11 +226,11 @@ def main():
                     frame_count = 0
 
                 if use_classifier:
+                    # t = time.time()
                     imgs = get_images(frame, bounding_boxes)
                     labels = []
-                    # t = time.time()
                     for img_idx, img in enumerate(imgs):
-                        img = img.astype(np.float32)
+                        #img = img.astype(np.float32)
 
                         # Infer
                         img = img.transpose([2, 0, 1]).reshape([1, 3, 160, 160])
@@ -273,8 +270,7 @@ def main():
                                 class_names[best_class_indices[i]],
                                 best_class_probabilities[i])
                             )
-                    # d = (time.time() - t) * 1000
-                    # LOG.info('facenet: %.3fms' % d)
+                    # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
 
             add_overlays(frame, bounding_boxes, frame_rate, labels=labels)
 
