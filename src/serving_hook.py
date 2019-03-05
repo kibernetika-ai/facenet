@@ -177,7 +177,7 @@ def preprocess(inputs, ctx, **kwargs):
     if len(image.shape) == 0:
         image = [image.tolist()]
 
-    image = cv2.imdecode(np.fromstring(image[0], np.uint8), cv2.IMREAD_COLOR)
+    image = cv2.imdecode(np.frombuffer(image[0], np.uint8), cv2.IMREAD_COLOR)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     use_tf = PARAMS['use_tf']
