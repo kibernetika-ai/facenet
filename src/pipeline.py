@@ -116,7 +116,7 @@ def main():
         t = app.tasks.get(task)
         if faces_set is not None:
             t.set_dataset_revision('faces', faces_set)
-            t.set_dataset_revision('facenet', facenet_revision)
+            t.set_model_revision('facenet', facenet_revision)
 
         if t.name in override_args and override_args[t.name]:
             override_task_arguments(t, override_args[t.name])
