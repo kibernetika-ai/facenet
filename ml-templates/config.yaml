@@ -20,7 +20,7 @@ spec:
       replicas: 1
       resources:
         limits:
-          cpu: "1"
+          cpu: "2"
           memory: 8Gi
         requests:
           cpu: 100m
@@ -38,7 +38,7 @@ spec:
       replicas: 1
       resources:
         limits:
-          cpu: "1"
+          cpu: "2"
           memory: 8Gi
         requests:
           cpu: 100m
@@ -56,7 +56,7 @@ spec:
       replicas: 1
       resources:
         limits:
-          cpu: "1"
+          cpu: "2"
           memory: 8Gi
         requests:
           cpu: 100m
@@ -75,7 +75,7 @@ spec:
       resources:
         limits:
           cpu: "1"
-          memory: 8Gi
+          memory: 1Gi
         requests:
           cpu: 100m
           memory: 64Mi
@@ -92,7 +92,7 @@ spec:
       replicas: 1
       resources:
         limits:
-          cpu: "1"
+          cpu: "2"
           memory: 8Gi
         requests:
           cpu: 100m
