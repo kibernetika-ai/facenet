@@ -25,42 +25,56 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from scipy import misc
-import sys
-import os
 import argparse
-import tensorflow as tf
-import numpy as np
-import facenet
-import align.detect_face
+import os
 import random
-from time import sleep
-import datetime
+import sys
 
-tf.logging.set_verbosity(tf.logging.INFO)
+import cv2
+from ml_serving.drivers import driver
+import numpy as np
+import tensorflow as tf
+
+import camera_openvino as ko
+import facenet
+
+# tf.logging.set_verbosity(tf.logging.INFO)
+LOG = tf.logging
+
+
+def print_fun(s):
+    print(s)
+    sys.stdout.flush()
 
 
 def main(args):
-    sleep(random.random())
     output_dir = os.path.expanduser(args.output_dir)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     # Store some git revision info in a text file in the log directory
     src_path, _ = os.path.split(os.path.realpath(__file__))
-    facenet.store_revision_info(src_path, output_dir, ' '.join(sys.argv))
+    # facenet.store_revision_info(src_path, output_dir, ' '.join(sys.argv))
     dataset = facenet.get_dataset(args.input_dir)
 
-    print('Creating networks and loading parameters')
+    print_fun('Creating networks and loading parameters')
 
-    with tf.Graph().as_default():
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=args.gpu_memory_fraction)
-        sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False))
-        with sess.as_default():
-            pnet, rnet, onet = align.detect_face.create_mtcnn(sess, args.model_dir)
+    # Load driver
+    drv = driver.load_driver("openvino")
+    # Instantinate driver
+    serving = drv()
+    model = (
+        "/opt/intel/computer_vision_sdk/deployment_tools/intel_models/"
+        "face-detection-retail-0004/FP32/face-detection-retail-0004.xml"
+    )
+    serving.load_model(
+        model,
+        device="CPU",
+        flexible_batch_size=True,
+    )
+    input_name = list(serving.inputs.keys())[0]
+    output_name = list(serving.outputs.keys())[0]
 
-    minsize = 20  # minimum size of face
-    threshold = [0.6, 0.7, 0.7]  # three steps's threshold
-    factor = 0.709  # scale factor
+    threshold = 0.5
 
     # Add a random key to the filename to allow alignment using multiple processes
     random_key = np.random.randint(0, high=99999)
@@ -81,112 +95,101 @@ def main(args):
                 nrof_images_total += 1
                 filename = os.path.splitext(os.path.split(image_path)[1])[0]
                 output_filename = os.path.join(output_class_dir, filename + '.png')
-                print(image_path)
+                print_fun(image_path)
                 if not os.path.exists(output_filename):
                     try:
-                        img = misc.imread(image_path)
-                    except (IOError, ValueError, IndexError) as e:
-                        errorMessage = '{}: {}'.format(image_path, e)
-                        print(errorMessage)
-                    else:
-                        if img.ndim < 2:
-                            print('Unable to align "%s", shape %s' % (image_path, img.shape))
-                            text_file.write('%s\n' % output_filename)
-                            continue
-                        if img.ndim == 2:
-                            img = facenet.to_rgb(img)
-                        img = img[:, :, 0:3]
+                        img = cv2.imread(image_path, cv2.IMREAD_COLOR).astype(np.float32)
+                    except Exception as e:
+                        error_message = '{}: {}'.format(image_path, e)
+                        print_fun('ERROR: %s' % error_message)
+                        continue
 
-                        try:
-                            bounding_boxes, _ = align.detect_face.detect_face_for_align(
-                                img, minsize, pnet, rnet, onet, threshold, factor
-                            )
-                        except Exception as e:
-                            print('Fail to align %s: %s' % (image_path, e))
-                            continue
+                    if len(img.shape) <= 2:
+                        print_fun('WARNING: Unable to align "%s", shape %s' % (image_path, img.shape))
+                        text_file.write('%s\n' % output_filename)
+                        continue
 
-                        nrof_faces = bounding_boxes.shape[0]
-                        if nrof_faces > 0:
-                            det = bounding_boxes[:, 0:4]
-                            det_arr = []
-                            img_size = np.asarray(img.shape)[0:2]
-                            if nrof_faces > 1:
-                                if args.detect_multiple_faces:
-                                    for i in range(nrof_faces):
-                                        det_arr.append(np.squeeze(det[i]))
-                                else:
-                                    bounding_box_size = (det[:, 2] - det[:, 0]) * (det[:, 3] - det[:, 1])
-                                    img_center = img_size / 2
-                                    offsets = np.vstack([(det[:, 0] + det[:, 2]) / 2 - img_center[1],
-                                                         (det[:, 1] + det[:, 3]) / 2 - img_center[0]])
-                                    offset_dist_squared = np.sum(np.power(offsets, 2.0), 0)
-                                    index = np.argmax(
-                                        bounding_box_size - offset_dist_squared * 2.0)  # some extra weight on the centering
-                                    det_arr.append(det[index, :])
-                            else:
-                                det_arr.append(np.squeeze(det))
+                    serving_img = cv2.resize(img, (300, 300), interpolation=cv2.INTER_AREA)
+                    serving_img = np.transpose(serving_img, [2, 0, 1]).reshape(1, 3, 300, 300)
+                    raw = serving.predict({input_name: serving_img})[output_name].reshape([-1, 7])
+                    # 7 values:
+                    # class_id, label, confidence, x_min, y_min, x_max, y_max
+                    # Select boxes where confidence > factor
+                    bboxes_raw = raw[raw[:, 2] > threshold]
+                    bboxes_raw[:, 3] = bboxes_raw[:, 3] * img.shape[1]
+                    bboxes_raw[:, 5] = bboxes_raw[:, 5] * img.shape[1]
+                    bboxes_raw[:, 4] = bboxes_raw[:, 4] * img.shape[0]
+                    bboxes_raw[:, 6] = bboxes_raw[:, 6] * img.shape[0]
 
-                            for i, det in enumerate(det_arr):
-                                det = np.squeeze(det)
-                                bb = np.zeros(4, dtype=np.int32)
-                                bb[0] = np.maximum(det[0] - args.margin / 2, 0)
-                                bb[1] = np.maximum(det[1] - args.margin / 2, 0)
-                                bb[2] = np.minimum(det[2] + args.margin / 2, img_size[1])
-                                bb[3] = np.minimum(det[3] + args.margin / 2, img_size[0])
-                                cropped = img[bb[1]:bb[3], bb[0]:bb[2], :]
-                                scaled = misc.imresize(cropped, (args.image_size, args.image_size), interp='bilinear')
-                                nrof_successfully_aligned += 1
-                                filename_base, file_extension = os.path.splitext(output_filename)
-                                if args.detect_multiple_faces:
-                                    output_filename_n = "{}_{}{}".format(filename_base, i, file_extension)
-                                else:
-                                    output_filename_n = "{}{}".format(filename_base, file_extension)
-                                misc.imsave(output_filename_n, scaled)
-                                text_file.write('%s %d %d %d %d\n' % (output_filename_n, bb[0], bb[1], bb[2], bb[3]))
-                        else:
-                            print('Unable to align "%s", n_faces=%s' % (image_path, nrof_faces))
-                            text_file.write('%s\n' % (output_filename))
+                    bounding_boxes = np.zeros([len(bboxes_raw), 5])
 
-    print('Total number of images: %d' % nrof_images_total)
-    print('Number of successfully aligned images: %d' % nrof_successfully_aligned)
-    if args.push is not None:
-        build_id = os.environ.get('BUILD_ID', None)
-        if os.environ.get('PROJECT_ID', None) and (build_id is not None):
-            from mlboardclient.api import client
-            mlboard = client.Client()
-            timestamp = datetime.datetime.now().strftime('%s')
-            version = '1.{}.0-{}'.format(build_id,timestamp)
-            mlboard.datasets.push(
-                os.environ.get('WORKSPACE_NAME'),
-                args.push,
-                version,
-                output_dir,
-                create=True
-            )
-            ref = '#/{}/catalog/dataset/{}/versions/{}'.format(os.environ.get('WORKSPACE_NAME'),args.push, version)
-            client.update_task_info({'dataset': ref,'push_version':version})
+                    bounding_boxes[:, 0:4] = bboxes_raw[:, 3:7]
+                    bounding_boxes[:, 4] = bboxes_raw[:, 2]
+
+                    nrof_faces = bounding_boxes.shape[0]
+                    if nrof_faces < 1:
+                        print_fun('WARNING: Unable to align "%s", n_faces=%s' % (image_path, nrof_faces))
+                        text_file.write('%s\n' % output_filename)
+
+                    imgs = ko.get_images(
+                        img,
+                        bounding_boxes,
+                        face_crop_size=args.image_size,
+                        face_crop_margin=args.margin,
+                        prewhiten=False,
+                    )
+                    for i, cropped in enumerate(imgs):
+                        nrof_successfully_aligned += 1
+                        bb = bounding_boxes[i]
+                        filename_base, file_extension = os.path.splitext(output_filename)
+                        output_filename_n = "{}_{}{}".format(filename_base, i, file_extension)
+
+                        text_file.write('%s %d %d %d %d\n' % (output_filename_n, bb[0], bb[1], bb[2], bb[3]))
+                        cv2.imwrite(output_filename_n, cropped)
+
+    print_fun('Total number of images: %d' % nrof_images_total)
+    print_fun('Number of successfully aligned images: %d' % nrof_successfully_aligned)
+    build_id = os.environ.get('BUILD_ID', None)
+    if os.environ.get('PROJECT_ID', None) and (build_id is not None):
+        from mlboardclient.api import client
+        client.update_task_info({'aligned_location': output_dir})
 
 
 def parse_arguments(argv):
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('input_dir', type=str, help='Directory with unaligned images.')
-    parser.add_argument('output_dir', type=str, help='Directory with aligned face thumbnails.')
-    parser.add_argument('--model_dir', type=str, default=None,
-                        help='Model location')
-    parser.add_argument('--image_size', type=int,
-                        help='Image size (height, width) in pixels.', default=182)
-    parser.add_argument('--margin', type=int,
-                        help='Margin for the crop around the bounding box (height, width) in pixels.', default=44)
-    parser.add_argument('--random_order',
-                        help='Shuffles the order of images to enable alignment using multiple processes.',
-                        action='store_true')
-    parser.add_argument('--gpu_memory_fraction', type=float,
-                        help='Upper bound on the amount of GPU memory that will be used by the process.', default=1.0)
-    parser.add_argument('--detect_multiple_faces', type=bool,
-                        help='Detect and align multiple faces per image.', default=True)
-    parser.add_argument('--push',type=str, default=None,
-                        help='Push data to catalog')
+    parser.add_argument(
+        'input_dir',
+        type=str,
+        help='Directory with unaligned images.'
+    )
+    parser.add_argument(
+        'output_dir',
+        type=str,
+        help='Directory with aligned face thumbnails.'
+    )
+    parser.add_argument(
+        '--model_dir',
+        type=str, default=None,
+        help='Model location'
+    )
+    parser.add_argument(
+        '--image_size',
+        type=int,
+        help='Image size (height, width) in pixels.',
+        default=160
+    )
+    parser.add_argument(
+        '--margin',
+        type=int,
+        help='Margin for the crop around the bounding box (height, width) in pixels.',
+        default=32
+    )
+    parser.add_argument(
+        '--random_order',
+        help='Shuffles the order of images to enable alignment using multiple processes.',
+        action='store_true'
+    )
     return parser.parse_args(argv)
 
 

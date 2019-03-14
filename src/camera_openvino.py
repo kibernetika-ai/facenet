@@ -89,9 +89,7 @@ def add_overlays(frame, boxes, frame_rate, labels=None):
             )
 
 
-def get_images(image, bounding_boxes):
-    face_crop_size = 160
-    face_crop_margin = 32
+def get_images(image, bounding_boxes, face_crop_size=160, face_crop_margin=32, prewhiten=True):
     images = []
 
     nrof_faces = bounding_boxes.shape[0]
@@ -114,7 +112,10 @@ def get_images(image, bounding_boxes):
             bb[3] = np.minimum(det[3] + face_crop_margin / 2, img_size[0])
             cropped = image[bb[1]:bb[3], bb[0]:bb[2], :]
             scaled = cv2.resize(cropped, (face_crop_size, face_crop_size), interpolation=cv2.INTER_AREA)
-            images.append(utils.prewhiten(scaled))
+            if prewhiten:
+                images.append(utils.prewhiten(scaled))
+            else:
+                images.append(scaled)
 
     return images
 
@@ -247,8 +248,6 @@ def main():
                     imgs = get_images(next_frame, bounding_boxes)
                     labels = []
                     for img_idx, img in enumerate(imgs):
-                        #img = img.astype(np.float32)
-
                         # Infer
                         # t = time.time()
                         img = img.transpose([2, 0, 1]).reshape([1, 3, 160, 160])
@@ -302,6 +301,7 @@ def main():
                 cv2.imshow('Video', frame)
             else:
                 print(bounding_boxes)
+                print(labels)
                 break
 
             next_request, cur_request = cur_request, next_request

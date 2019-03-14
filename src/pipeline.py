@@ -111,11 +111,9 @@ def main():
     LOG.info("Use facenet revision %s" % facenet_revision)
     LOG.info("=" * 50)
 
-    faces_set = None
     for task in run_tasks:
         t = app.tasks.get(task)
-        if faces_set is not None:
-            t.set_dataset_revision('faces', faces_set)
+        if task != "align-images":
             t.set_model_revision('facenet', facenet_revision)
 
         if t.name in override_args and override_args[t.name]:
@@ -150,9 +148,6 @@ def main():
             "Task %s-%s completed with status %s."
             % (completed.name, completed.build, completed.status)
         )
-        if task == 'align-images':
-            faces_set = completed.exec_info['push_version']
-            LOG.info('Setup new faces set: {}'.format(faces_set))
 
     LOG.info("Workflow completed with status SUCCESS")
 
