@@ -28,6 +28,7 @@ from __future__ import print_function
 import argparse
 import os
 import random
+import shutil
 import sys
 
 import cv2
@@ -49,8 +50,9 @@ def print_fun(s):
 
 def main(args):
     output_dir = os.path.expanduser(args.output_dir)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    shutil.rmtree(output_dir, ignore_errors=True)
+    os.makedirs(output_dir)
+
     # Store some git revision info in a text file in the log directory
     src_path, _ = os.path.split(os.path.realpath(__file__))
     # facenet.store_revision_info(src_path, output_dir, ' '.join(sys.argv))
