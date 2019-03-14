@@ -33,6 +33,7 @@ import random
 import re
 from subprocess import Popen, PIPE
 
+import cv2
 import numpy as np
 from PIL import Image
 from scipy import interpolate
@@ -282,7 +283,8 @@ def load_data(image_paths, do_random_crop, do_random_flip, image_size, do_prewhi
     nrof_samples = len(image_paths)
     images = np.zeros((nrof_samples, image_size, image_size, 3))
     for i in range(nrof_samples):
-        img = misc.imread(image_paths[i])
+        img = cv2.imread(image_paths[i], cv2.IMREAD_COLOR)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         if img.ndim == 2:
             img = to_rgb(img)
         if len(img.shape) >= 3 and img.shape[2] > 3:

@@ -52,6 +52,11 @@ except ImportError:
 LOG = logging
 
 
+def print_fun(s):
+    print(s)
+    sys.stdout.flush()
+
+
 def update_data(data, use_mlboard, mlboard):
     if use_mlboard and mlboard:
         mlboard.update_task_info(data)
@@ -66,7 +71,7 @@ def upload_model(use_mlboard, mlboard, classifier_path, model, version):
     if not use_mlboard or not mlboard:
         return
 
-    LOG.info('Uploading model...')
+    print_fun('Uploading model...')
     dirname = '/tmp/classifier'
     os.makedirs(dirname)
     shutil.copy(classifier_path, path.join(dirname, path.basename(classifier_path)))
@@ -75,7 +80,7 @@ def upload_model(use_mlboard, mlboard, classifier_path, model, version):
 
     shutil.rmtree(dirname)
     update_data({'model_reference': catalog_ref(model, 'mlmodel', version)}, use_mlboard, mlboard)
-    LOG.info("New model uploaded as '%s', version '%s'." % (model, version))
+    print_fun("New model uploaded as '%s', version '%s'." % (model, version))
 
 
 def confusion(y_test, y_score, labels):
@@ -90,11 +95,11 @@ def confusion(y_test, y_score, labels):
                                cmap=plt.cm.Blues):
         if normalize:
             cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-            LOG.info("Normalized confusion matrix")
+            print_fun("Normalized confusion matrix")
         else:
-            LOG.info('Confusion matrix, without normalization')
+            print_fun('Confusion matrix, without normalization')
 
-        LOG.info(cm)
+        print_fun(cm)
 
         plt.imshow(cm, interpolation='nearest', cmap=cmap)
         plt.title(title)
@@ -131,9 +136,9 @@ def main(args):
             mlboard.apps.get()
         except Exception:
             mlboard = None
-            LOG.info('Do not use mlboard.')
+            print_fun('Do not use mlboard.')
         else:
-            LOG.info('Use mlboard parameters logging.')
+            print_fun('Use mlboard parameters logging.')
             use_mlboard = True
 
     if args.use_split_dataset:
@@ -155,8 +160,8 @@ def main(args):
 
     paths, labels = facenet.get_image_paths_and_labels(dataset)
 
-    LOG.info('Number of classes: %d' % len(dataset))
-    LOG.info('Number of images: %d' % len(paths))
+    print_fun('Number of classes: %d' % len(dataset))
+    print_fun('Number of images: %d' % len(paths))
     data = {
         'num_classes': len(dataset),
         'num_images': len(paths),
@@ -168,7 +173,7 @@ def main(args):
     update_data(data, use_mlboard, mlboard)
 
     # Load the model
-    LOG.info('Loading feature extraction model')
+    print_fun('Loading feature extraction model')
 
     # Load driver
     drv = driver.load_driver(args.driver)
@@ -183,7 +188,7 @@ def main(args):
     )
 
     # Run forward pass to calculate embeddings
-    LOG.info('Calculating features for images')
+    print_fun('Calculating features for images')
 
     total_time = 0.
 
@@ -211,7 +216,7 @@ def main(args):
             end_index += i * args.rotate_count
 
         for j in range(end_index - start_index):
-            LOG.info('Batch {} <-> {}'.format(paths_batch[j], labels[start_index + j]))
+            print_fun('Batch {} <-> {}'.format(paths_batch[j], labels[start_index + j]))
         images = facenet.load_data(paths_batch, False, False, args.image_size)
 
         images_size = len(images)
@@ -219,7 +224,7 @@ def main(args):
             for k in range(images_size):
                 img = images[k]
                 for i in range(args.noise_count):
-                    LOG.info(
+                    print_fun(
                         'Applying noise to image {}, #{}'.format(
                             paths_batch[k], i + 1
                         )
@@ -236,7 +241,7 @@ def main(args):
             for k in range(images_size):
                 img = images[k]
                 for i in range(args.rotate_count):
-                    LOG.info(
+                    print_fun(
                         'Applying rotate to image {}, #{}'.format(
                             paths_batch[k], i + 1
                         )
@@ -266,39 +271,39 @@ def main(args):
 
     classifier_filename_exp = os.path.expanduser(args.classifier)
     average_time = total_time / embeddings_size * 1000
-    LOG.info('Average time: %.3fms' % average_time)
+    print_fun('Average time: %.3fms' % average_time)
 
     if args.mode == 'TRAIN':
         # Train classifier
-        LOG.info('Training classifier')
+        print_fun('Training classifier')
         model = svm.SVC(kernel='linear', probability=True)
         model.fit(emb_array, labels)
 
         # Create a list of class names
         class_names = [cls.name.replace('_', ' ') for cls in dataset]
-        LOG.info('Classes:')
-        LOG.info(class_names)
+        print_fun('Classes:')
+        print_fun(class_names)
 
         # Saving classifier model
         with open(classifier_filename_exp, 'wb') as outfile:
             pickle.dump((model, class_names), outfile, protocol=2)
-        LOG.info('Saved classifier model to file "%s"' % classifier_filename_exp)
+        print_fun('Saved classifier model to file "%s"' % classifier_filename_exp)
         update_data({'average_time': '%.3fms' % average_time}, use_mlboard, mlboard)
 
     elif args.mode == 'CLASSIFY':
         # Classify images
-        LOG.info('Testing classifier')
+        print_fun('Testing classifier')
         with open(classifier_filename_exp, 'rb') as infile:
             (model, class_names) = pickle.load(infile)
 
-        LOG.info('Loaded classifier model from file "%s"' % classifier_filename_exp)
+        print_fun('Loaded classifier model from file "%s"' % classifier_filename_exp)
 
         predictions = model.predict_proba(emb_array)
         best_class_indices = np.argmax(predictions, axis=1)
         best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
 
         for i in range(len(best_class_indices)):
-            LOG.info('%4d  %s: %.3f' % (i, class_names[best_class_indices[i]], best_class_probabilities[i]))
+            print_fun('%4d  %s: %.3f' % (i, class_names[best_class_indices[i]], best_class_probabilities[i]))
 
         accuracy = np.mean(np.equal(best_class_indices, labels))
 
@@ -310,7 +315,7 @@ def main(args):
         }
 
         update_data(data, use_mlboard, mlboard)
-        LOG.info('Accuracy: %.3f' % accuracy)
+        print_fun('Accuracy: %.3f' % accuracy)
         if args.upload_model and accuracy >= args.upload_threshold:
             timestamp = datetime.datetime.now().strftime('%s')
             model_name = 'facenet-classifier'
@@ -320,7 +325,7 @@ def main(args):
 
             version = '1.0.0-%s-%s' % (args.driver, timestamp)
 
-            LOG.info('Uploading model as %s:%s' % (model_name, version))
+            print_fun('Uploading model as %s:%s' % (model_name, version))
             upload_model(
                 use_mlboard,
                 mlboard,
