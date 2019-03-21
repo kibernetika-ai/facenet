@@ -116,7 +116,7 @@ def confusion(y_test, y_score, labels):
                      horizontalalignment="center",
                      color="white" if cm[i, j] > thresh else "black")
 
-        plt.tight_layout()
+        plt.tight_layout(pad=1.5)
         plt.ylabel('True label')
         plt.xlabel('Predicted label')
         buf = io.BytesIO()
