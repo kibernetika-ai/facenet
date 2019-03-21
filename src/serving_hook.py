@@ -136,7 +136,7 @@ def load_nets(**kwargs):
         if isinstance(model, svm.SVC):
             embedding_size = model.shape_fit_[1]
         elif isinstance(model, neighbors.KNeighborsClassifier):
-            embedding_size = model._fit_X[1]
+            embedding_size = model._fit_X.shape[1]
         else:
             # try embedding_size = 512
             embedding_size = 512
