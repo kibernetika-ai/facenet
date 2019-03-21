@@ -38,6 +38,7 @@ import time
 
 import numpy as np
 from sklearn import svm
+from sklearn import neighbors
 
 import facenet
 from ml_serving.drivers import driver
@@ -391,7 +392,7 @@ def parse_arguments(argv):
     parser.add_argument(
         '--driver',
         help='Driver for inference.',
-        default="tensorflow",
+        default="openvino",
     )
     parser.add_argument(
         '--batch_size',
