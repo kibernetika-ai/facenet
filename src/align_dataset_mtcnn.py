@@ -81,6 +81,7 @@ def main(args):
     # Add a random key to the filename to allow alignment using multiple processes
     random_key = np.random.randint(0, high=99999)
     bounding_boxes_filename = os.path.join(output_dir, 'bounding_boxes_%05d.txt' % random_key)
+    min_face_area = args.min_face_size ** 2
 
     with open(bounding_boxes_filename, "w") as text_file:
         nrof_images_total = 0
@@ -112,7 +113,7 @@ def main(args):
                         continue
 
                     serving_img = cv2.resize(img, (300, 300), interpolation=cv2.INTER_AREA)
-                    serving_img = np.transpose(serving_img, [2, 0, 1]).reshape(1, 3, 300, 300)
+                    serving_img = np.transpose(serving_img, [2, 0, 1]).reshape([1, 3, 300, 300])
                     raw = serving.predict({input_name: serving_img})[output_name].reshape([-1, 7])
                     # 7 values:
                     # class_id, label, confidence, x_min, y_min, x_max, y_max
@@ -128,10 +129,28 @@ def main(args):
                     bounding_boxes[:, 0:4] = bboxes_raw[:, 3:7]
                     bounding_boxes[:, 4] = bboxes_raw[:, 2]
 
+                    # Get the biggest box: find the box with largest square:
+                    # (y1 - y0) * (x1 - x0) - size of box.
+                    bbs = bounding_boxes
+                    area = (bbs[:, 3] - bbs[:, 1]) * (bbs[:, 2] - bbs[:, 0])
+                    num = np.argmax(area)
+                    if area[num] < min_face_area:
+                        print_fun(
+                            'WARNING: Face found but too small - about {}px '
+                            'width against required minimum of {}px. Try'
+                            ' adjust parameter --min-face-size'.format(
+                                int(np.sqrt(area[num])), args.min_face_size
+                            )
+                        )
+                        continue
+
+                    bounding_boxes = np.stack([bbs[num]])
+
                     nrof_faces = bounding_boxes.shape[0]
                     if nrof_faces < 1:
                         print_fun('WARNING: Unable to align "%s", n_faces=%s' % (image_path, nrof_faces))
                         text_file.write('%s\n' % output_filename)
+                        continue
 
                     imgs = ko.get_images(
                         img,
@@ -174,6 +193,12 @@ def parse_arguments(argv):
         '--model_dir',
         type=str, default=None,
         help='Model location'
+    )
+    parser.add_argument(
+        '--min-face-size',
+        type=int,
+        help='Minimum face size in pixels.',
+        default=25
     )
     parser.add_argument(
         '--image_size',
