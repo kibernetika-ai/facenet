@@ -300,6 +300,7 @@ def main(args):
         print_fun('Loaded classifier model from file "%s"' % classifier_filename_exp)
 
         predictions = model.predict_proba(emb_array)
+        __import__('ipdb').set_trace()
         best_class_indices = np.argmax(predictions, axis=1)
         best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
 

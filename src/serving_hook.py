@@ -8,6 +8,8 @@ import cv2
 import numpy as np
 from openvino import inference_engine as ie
 import six
+from sklearn import svm
+from sklearn import neighbors
 
 from align import detect_face
 import camera_openvino as ko
@@ -35,6 +37,7 @@ onet = None
 model = None
 face_detect = None
 class_names = None
+embedding_size = 0
 
 
 def boolean_string(s):
@@ -125,10 +128,19 @@ def load_nets(**kwargs):
     with open(PARAMS['classifier'], 'rb') as f:
         global model
         global class_names
+        global embedding_size
         opts = {'file': f}
         if six.PY3:
             opts['encoding'] = 'latin1'
         (model, class_names) = pickle.load(**opts)
+        if isinstance(model, svm.SVC):
+            embedding_size = model.shape_fit_[1]
+        elif isinstance(model, neighbors.KNeighborsClassifier):
+            embedding_size = model._fit_X[1]
+        else:
+            # try embedding_size = 512
+            embedding_size = 512
+
     LOG.info('Done.')
 
 
@@ -255,7 +267,7 @@ def postprocess(outputs, ctx, **kwargs):
         if ctx.skip:
             break
 
-        output = item_output.reshape(1, model.shape_fit_[1])
+        output = item_output.reshape(1, embedding_size)
         predictions = model.predict_proba(output)
 
         best_class_indices = np.argmax(predictions, axis=1)
