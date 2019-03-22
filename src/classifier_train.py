@@ -157,7 +157,8 @@ def main(args):
 
     # Check that there are at least one training image per class
     for cls in dataset:
-        assert len(cls.image_paths) > 0, 'There must be at least one image for each class in the dataset'
+        if len(cls.image_paths) == 0:
+            print_fun('WARNING: %s: There are no aligned images in this class.' % cls)
 
     paths, labels = facenet.get_image_paths_and_labels(dataset)
 
@@ -300,7 +301,6 @@ def main(args):
         print_fun('Loaded classifier model from file "%s"' % classifier_filename_exp)
 
         predictions = model.predict_proba(emb_array)
-        __import__('ipdb').set_trace()
         best_class_indices = np.argmax(predictions, axis=1)
         best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
 

@@ -133,6 +133,12 @@ def main(args):
                     # (y1 - y0) * (x1 - x0) - size of box.
                     bbs = bounding_boxes
                     area = (bbs[:, 3] - bbs[:, 1]) * (bbs[:, 2] - bbs[:, 0])
+
+                    if len(area) < 1:
+                        print_fun('WARNING: Unable to align "%s", n_faces=%s' % (image_path, len(area)))
+                        text_file.write('%s\n' % output_filename)
+                        continue
+
                     num = np.argmax(area)
                     if area[num] < min_face_area:
                         print_fun(
@@ -145,12 +151,6 @@ def main(args):
                         continue
 
                     bounding_boxes = np.stack([bbs[num]])
-
-                    nrof_faces = bounding_boxes.shape[0]
-                    if nrof_faces < 1:
-                        print_fun('WARNING: Unable to align "%s", n_faces=%s' % (image_path, nrof_faces))
-                        text_file.write('%s\n' % output_filename)
-                        continue
 
                     imgs = ko.get_images(
                         img,
