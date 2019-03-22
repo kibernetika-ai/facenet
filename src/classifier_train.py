@@ -279,6 +279,8 @@ def main(args):
         # Train classifier
         print_fun('Training classifier')
         model = svm.SVC(kernel='linear', probability=True)
+        # n_neighbors = int(round(np.sqrt(len(emb_array))))
+        # model = neighbors.KNeighborsClassifier(n_neighbors=3, weights='distance')
         model.fit(emb_array, labels)
 
         # Create a list of class names

@@ -255,7 +255,7 @@ def flip(image, random_flip):
 
 def rotate(image):
     from PIL import Image
-    angle = np.random.random_integers(-10, 10, 1)[0]
+    angle = np.random.randint(-10, 10, 1)[0]
     if image.dtype in [np.float, np.float32, np.float64]:
         image = (image * 255 / np.max(image)).astype('uint8')
 
@@ -292,8 +292,8 @@ def load_data(image_paths, do_random_crop, do_random_flip, image_size, do_prewhi
             img = np.array(Image.fromarray(img).convert('RGB'))
         if do_prewhiten:
             img = prewhiten(img)
-        img = crop(img, do_random_crop, image_size)
-        img = flip(img, do_random_flip)
+        # img = crop(img, do_random_crop, image_size)
+        # img = flip(img, do_random_flip)
         images[i, :, :, :] = img
     return images
 
