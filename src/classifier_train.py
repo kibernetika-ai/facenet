@@ -319,7 +319,7 @@ def main(args):
         accuracy = np.mean(np.equal(best_class_indices, labels))
 
         if mlboard and use_mlboard:
-            rpt = confusion(labels, best_class_indices, class_names)
+            rpt = confusion(labels, best_class_indices, class_names, use_mlboard)
             data = {
                 'accuracy': accuracy,
                 '#documents.confusion_matrix.html': rpt,
