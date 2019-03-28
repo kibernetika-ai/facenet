@@ -281,7 +281,8 @@ def main(args):
     if args.mode == 'TRAIN':
         # Train classifier
         model = None
-        print_fun('Training classifier %s' % args.algorithm)
+        print_fun('Classifier algorithm %s' % args.algorithm)
+        update_data({'classifier_algorithm': args.algorithm}, use_mlboard, mlboard)
         if args.algorithm == 'kNN':
             # n_neighbors = int(round(np.sqrt(len(emb_array))))
             model = neighbors.KNeighborsClassifier(n_neighbors=3, weights='distance')
