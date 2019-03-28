@@ -318,15 +318,14 @@ def main(args):
 
         accuracy = np.mean(np.equal(best_class_indices, labels))
 
-        if mlboard and use_mlboard:
-            rpt = confusion(labels, best_class_indices, class_names, use_mlboard)
-            data = {
-                'accuracy': accuracy,
-                '#documents.confusion_matrix.html': rpt,
-                'average_time': '%.3fms' % average_time
-            }
+        rpt = confusion(labels, best_class_indices, class_names, use_mlboard)
+        data = {
+            'accuracy': accuracy,
+            '#documents.confusion_matrix.html': rpt,
+            'average_time': '%.3fms' % average_time
+        }
 
-            update_data(data, use_mlboard, mlboard)
+        update_data(data, use_mlboard, mlboard)
 
         print_fun('Accuracy: %.3f' % accuracy)
         if args.upload_model and accuracy >= args.upload_threshold:
