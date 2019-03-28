@@ -264,12 +264,14 @@ def rotate(image):
 
 
 def random_noise(image):
-    limit = (np.max(image) - np.min(image)) / 30
-    mean = 0.0  # some constant
-    noisy_img = image + np.random.normal(mean, limit, image.shape)
-    noisy_img_clipped = np.clip(noisy_img, 0, 255)
-
-    return noisy_img_clipped
+    row, col, ch = image.shape
+    mean = 0
+    var = 0.1
+    sigma = var ** 0.5
+    gauss = np.random.normal(mean, sigma, (row, col, ch))
+    gauss = gauss.reshape([row, col, ch])
+    noisy = image + gauss
+    return noisy
 
 
 def to_rgb(img):
