@@ -11,7 +11,9 @@ spec:
   - name: align-images
     resources:
     - command: python align_dataset_mtcnn.py
-        $FACES_DIR $TRAINING_DIR/aligned-images --image_size 160  --margin 32 --model_dir $FACENET_DIR
+        $FACES_DIR $TRAINING_DIR/aligned-images
+        --image_size 160
+        --margin 32
       default_volume_mapping: true
       images:
         cpu: kuberlab/serving:latest-openvino
@@ -29,7 +31,12 @@ spec:
       workDir: $SRC_DIR
   - name: train-classifier
     resources:
-    - command: python3 classifier_train.py TRAIN $TRAINING_DIR/aligned-images --model $FACENET_DIR/facenet.xml --classifier $TRAINING_DIR/classifier.pkl --driver openvino --device CPU
+    - command: python classifier_train.py
+        TRAIN $TRAINING_DIR/aligned-images
+        --model $FACENET_DIR/facenet.xml
+        --classifier $TRAINING_DIR/classifier.pkl
+        --driver openvino
+        --device CPU
       default_volume_mapping: true
       images:
         cpu: kuberlab/serving:latest-openvino
@@ -47,7 +54,14 @@ spec:
       workDir: $SRC_DIR
   - name: validate-classifier
     resources:
-    - command: python3 classifier_train.py CLASSIFY $TRAINING_DIR/aligned-images --model $FACENET_DIR/facenet.xml --classifier $TRAINING_DIR/classifier.pkl --upload-model --upload-threshold 0.9 --driver openvino --device CPU
+    - command: python classifier_train.py
+        CLASSIFY $TRAINING_DIR/aligned-images
+        --model $FACENET_DIR/facenet.xml
+        --classifier $TRAINING_DIR/classifier.pkl
+        --upload-model
+        --upload-threshold 0.9
+        --driver openvino
+        --device CPU
       default_volume_mapping: true
       images:
         cpu: kuberlab/serving:latest-openvino
@@ -83,7 +97,13 @@ spec:
       workDir: $SRC_DIR
   - name: model-converter
     resources:
-    - command: python openvino_converter.py --all --training_dir $TRAINING_DIR/model --push_model true --facenet_graph $FACENET_DIR/20180408-102900.pb --target CPU --align_model_dir $FACENET_DIR
+    - command: python openvino_converter.py
+        --all
+        --training_dir $TRAINING_DIR/model
+        --push_model true
+        --facenet_graph $FACENET_DIR/20180408-102900.pb
+        --target CPU
+        --align_model_dir $FACENET_DIR
       default_volume_mapping: true
       images:
         cpu: kuberlab/openvino:cpu-36

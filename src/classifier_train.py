@@ -84,13 +84,13 @@ def upload_model(use_mlboard, mlboard, classifier_path, model, version):
     print_fun("New model uploaded as '%s', version '%s'." % (model, version))
 
 
-def confusion(y_test, y_score, labels):
+def confusion(y_test, y_score, labels, use_mlboard):
     from sklearn.metrics import confusion_matrix
     import itertools
     import matplotlib.pyplot as plt
     import io
     import base64
-    def _plot_confusion_matrix(cm, classes,
+    def _plot_confusion_matrix(cm, classes, use_mlboard,
                                normalize=False,
                                title='Confusion matrix',
                                cmap=plt.cm.Blues):
@@ -101,6 +101,9 @@ def confusion(y_test, y_score, labels):
             print_fun('Confusion matrix, without normalization')
 
         print_fun(cm)
+
+        if not use_mlboard:
+            return ''
 
         plt.imshow(cm, interpolation='nearest', cmap=cmap)
         plt.title(title)
@@ -125,7 +128,7 @@ def confusion(y_test, y_score, labels):
         return '<html><img src="data:image/png;base64,{}"/></html>'.format(base64.b64encode(buf.getvalue()).decode())
 
     cm = confusion_matrix(y_test, y_score)
-    return _plot_confusion_matrix(cm, labels)
+    return _plot_confusion_matrix(cm, labels, use_mlboard)
 
 
 def main(args):
@@ -277,10 +280,13 @@ def main(args):
 
     if args.mode == 'TRAIN':
         # Train classifier
-        print_fun('Training classifier')
-        model = svm.SVC(kernel='linear', probability=True)
-        # n_neighbors = int(round(np.sqrt(len(emb_array))))
-        # model = neighbors.KNeighborsClassifier(n_neighbors=3, weights='distance')
+        model = None
+        print_fun('Training classifier %s' % args.algorithm)
+        if args.algorithm == 'kNN':
+            # n_neighbors = int(round(np.sqrt(len(emb_array))))
+            model = neighbors.KNeighborsClassifier(n_neighbors=3, weights='distance')
+        else:
+            model = svm.SVC(kernel='linear', probability=True)
         model.fit(emb_array, labels)
 
         # Create a list of class names
@@ -311,7 +317,7 @@ def main(args):
 
         accuracy = np.mean(np.equal(best_class_indices, labels))
 
-        rpt = confusion(labels, best_class_indices, class_names)
+        rpt = confusion(labels, best_class_indices, class_names, use_mlboard)
         data = {
             'accuracy': accuracy,
             '#documents.confusion_matrix.html': rpt,
@@ -379,6 +385,12 @@ def parse_arguments(argv):
         help='Classifier model file name as a pickle (.pkl) file. ' +
              'For training this is the output and for classification this is an input.',
         required=True,
+    )
+    parser.add_argument(
+        '--algorithm',
+        help='Classifier algorithm.',
+        default="SVM",
+        choices=["SVM", "kNN"],
     )
     parser.add_argument(
         '--use_split_dataset',

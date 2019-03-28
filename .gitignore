@@ -95,3 +95,8 @@ ENV/
 .DS_Store
 
 facenet.iml
+
+facenet-pretrained-openvino-cpu
+faces
+training
+src/cmd

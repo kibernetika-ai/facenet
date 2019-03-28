@@ -190,11 +190,6 @@ def parse_arguments(argv):
         help='Directory with aligned face thumbnails.'
     )
     parser.add_argument(
-        '--model_dir',
-        type=str, default=None,
-        help='Model location'
-    )
-    parser.add_argument(
         '--min-face-size',
         type=int,
         help='Minimum face size in pixels.',
