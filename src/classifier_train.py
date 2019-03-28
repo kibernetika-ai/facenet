@@ -321,7 +321,6 @@ def main(args):
         rpt = confusion(labels, best_class_indices, class_names, use_mlboard and not args.skip_draw_confusion_matrix)
         data = {
             'accuracy': accuracy,
-            '#documents.confusion_matrix.html': rpt,
             'average_time': '%.3fms' % average_time
         }
         if not args.skip_draw_confusion_matrix:
