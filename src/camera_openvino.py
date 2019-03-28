@@ -187,7 +187,21 @@ def main():
             usePiCamera=args.camera_device == "PI",
             resolution=(640, 480),
             # framerate=24
-        ).start()
+        )
+        if args.camera_device == "CV":
+            default_w = vs.stream.stream.get(cv2.CAP_PROP_FRAME_WIDTH)
+            default_h = vs.stream.stream.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            vs.stream.stream.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            vs.stream.stream.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            ret, _ = vs.stream.stream.read()
+            if not ret:
+                # fallback
+                vs.stream.stream.release()
+                vs.stream.stream.open(0)
+                vs.stream.stream.set(cv2.CAP_PROP_FRAME_WIDTH, default_w)
+                vs.stream.stream.set(cv2.CAP_PROP_FRAME_HEIGHT, default_h)
+
+        vs.start()
         if args.camera_device == "PI":
             time.sleep(1)
 
