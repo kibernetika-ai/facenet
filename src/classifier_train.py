@@ -327,6 +327,7 @@ def main(args):
         if not args.skip_draw_confusion_matrix:
             data['#documents.confusion_matrix.html'] = rpt
         update_data(data, use_mlboard, mlboard)
+
         print_fun('Accuracy: %.3f' % accuracy)
 
         if args.upload_model and accuracy >= args.upload_threshold:
