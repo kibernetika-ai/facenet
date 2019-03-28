@@ -84,13 +84,13 @@ def upload_model(use_mlboard, mlboard, classifier_path, model, version):
     print_fun("New model uploaded as '%s', version '%s'." % (model, version))
 
 
-def confusion(y_test, y_score, labels, use_mlboard):
+def confusion(y_test, y_score, labels, draw):
     from sklearn.metrics import confusion_matrix
     import itertools
     import matplotlib.pyplot as plt
     import io
     import base64
-    def _plot_confusion_matrix(cm, classes, use_mlboard,
+    def _plot_confusion_matrix(cm, classes, draw,
                                normalize=False,
                                title='Confusion matrix',
                                cmap=plt.cm.Blues):
@@ -102,7 +102,7 @@ def confusion(y_test, y_score, labels, use_mlboard):
 
         print_fun(cm)
 
-        if not use_mlboard:
+        if not draw:
             return ''
 
         plt.imshow(cm, interpolation='nearest', cmap=cmap)
@@ -128,7 +128,7 @@ def confusion(y_test, y_score, labels, use_mlboard):
         return '<html><img src="data:image/png;base64,{}"/></html>'.format(base64.b64encode(buf.getvalue()).decode())
 
     cm = confusion_matrix(y_test, y_score)
-    return _plot_confusion_matrix(cm, labels, use_mlboard)
+    return _plot_confusion_matrix(cm, labels, draw)
 
 
 def main(args):
@@ -318,15 +318,17 @@ def main(args):
 
         accuracy = np.mean(np.equal(best_class_indices, labels))
 
-        rpt = confusion(labels, best_class_indices, class_names, use_mlboard)
+        rpt = confusion(labels, best_class_indices, class_names, use_mlboard and not args.skip_draw_confusion_matrix)
         data = {
             'accuracy': accuracy,
             '#documents.confusion_matrix.html': rpt,
             'average_time': '%.3fms' % average_time
         }
-
+        if not args.skip_draw_confusion_matrix:
+            data['#documents.confusion_matrix.html'] = rpt
         update_data(data, use_mlboard, mlboard)
         print_fun('Accuracy: %.3f' % accuracy)
+
         if args.upload_model and accuracy >= args.upload_threshold:
             timestamp = datetime.datetime.now().strftime('%s')
             model_name = 'facenet-classifier'
@@ -464,6 +466,11 @@ def parse_arguments(argv):
     )
     parser.add_argument(
         '--upload-model',
+        action='store_true',
+        default=False,
+    )
+    parser.add_argument(
+        '--skip-draw-confusion-matrix',
         action='store_true',
         default=False,
     )
