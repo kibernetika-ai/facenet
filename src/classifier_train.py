@@ -204,7 +204,7 @@ def main(args):
         embeddings_size += nrof_images * args.noise_count
 
     if args.flip:
-        embeddings_size += nrof_images * args.flip_count
+        embeddings_size += nrof_images * 1
 
     emb_array = np.zeros((embeddings_size, 512))
     for i in range(nrof_batches_per_epoch):
@@ -217,8 +217,8 @@ def main(args):
             end_index += i * args.noise_count
 
         if args.flip:
-            start_index += i * args.flip_count
-            end_index += i * args.flip_count
+            start_index += i * 1
+            end_index += i * 1
 
         for j in range(end_index - start_index):
             print_fun('Batch {} <-> {}'.format(paths_batch[j], labels[start_index + j]))
@@ -245,7 +245,7 @@ def main(args):
         if args.flip:
             for k in range(images_size):
                 img = images[k]
-                for i in range(args.flip_count):
+                for i in range(1):
                     print_fun(
                         'Applying flip to image {}, #{}'.format(
                             paths_batch[k], i + 1
@@ -439,12 +439,6 @@ def parse_arguments(argv):
         '--flip',
         action='store_true',
         help='Add horizontal flip to images.',
-    )
-    parser.add_argument(
-        '--flip-count',
-        type=int,
-        default=1,
-        help='Flip count for each image.',
     )
     parser.add_argument(
         '--image_size',
