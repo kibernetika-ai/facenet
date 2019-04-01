@@ -314,7 +314,13 @@ def main(args):
         best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
 
         for i in range(len(best_class_indices)):
-            print_fun('%4d  %s: %.3f' % (i, class_names[best_class_indices[i]], best_class_probabilities[i]))
+            predicted = best_class_indices[i]
+            if predicted == labels[i]:
+                print_fun('%4d  %s: %.3f' % (i, class_names[predicted], best_class_probabilities[i]))
+            else:
+                print_fun('%4d  %s: %.3f, wrong! Should be %s.' % (
+                    i, class_names[predicted], best_class_probabilities[i], class_names[labels[i]])
+                )
 
         accuracy = np.mean(np.equal(best_class_indices, labels))
 
