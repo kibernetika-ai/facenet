@@ -203,8 +203,8 @@ def main(args):
     if args.noise:
         embeddings_size += nrof_images * args.noise_count
 
-    if args.rotate:
-        embeddings_size += nrof_images * args.rotate_count
+    if args.flip:
+        embeddings_size += nrof_images * args.flip_count
 
     emb_array = np.zeros((embeddings_size, 512))
     for i in range(nrof_batches_per_epoch):
@@ -216,9 +216,9 @@ def main(args):
             start_index += i * args.noise_count
             end_index += i * args.noise_count
 
-        if args.rotate:
-            start_index += i * args.rotate_count
-            end_index += i * args.rotate_count
+        if args.flip:
+            start_index += i * args.flip_count
+            end_index += i * args.flip_count
 
         for j in range(end_index - start_index):
             print_fun('Batch {} <-> {}'.format(paths_batch[j], labels[start_index + j]))
@@ -242,20 +242,20 @@ def main(args):
                     images = np.concatenate((images, noised.reshape(1, *noised.shape)))
                     end_index += 1
 
-        if args.rotate:
+        if args.flip:
             for k in range(images_size):
                 img = images[k]
-                for i in range(args.rotate_count):
+                for i in range(args.flip_count):
                     print_fun(
-                        'Applying rotate to image {}, #{}'.format(
+                        'Applying flip to image {}, #{}'.format(
                             paths_batch[k], i + 1
                         )
                     )
-                    rotated = facenet.rotate(img)
+                    flipped = facenet.horizontal_flip(img)
                     # Expand labels
                     labels.insert(start_index+k, labels[start_index+k])
                     # Add image to list
-                    images = np.concatenate((images, rotated.reshape(1, *rotated.shape)))
+                    images = np.concatenate((images, flipped.reshape(1, *flipped.shape)))
                     end_index += 1
 
         if serving.driver_name == 'tensorflow':
@@ -430,15 +430,15 @@ def parse_arguments(argv):
         help='Noise count for each image.',
     )
     parser.add_argument(
-        '--rotate',
+        '--flip',
         action='store_true',
-        help='Add random rotate to images.',
+        help='Add horizontal flip to images.',
     )
     parser.add_argument(
-        '--rotate-count',
+        '--flip-count',
         type=int,
         default=1,
-        help='Rotate count for each image.',
+        help='Flip count for each image.',
     )
     parser.add_argument(
         '--image_size',

@@ -263,6 +263,10 @@ def rotate(image):
     return np.array(im)
 
 
+def horizontal_flip(image):
+    return np.fliplr(image)
+
+
 def random_noise(image):
     mean = 0
     var = 0.1
