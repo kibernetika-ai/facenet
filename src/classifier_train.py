@@ -287,7 +287,7 @@ def main(args):
             model = svm.SVC(kernel='linear', probability=True)
         else:
             # n_neighbors = int(round(np.sqrt(len(emb_array))))
-            model = neighbors.KNeighborsClassifier(n_neighbors=3, weights='distance')
+            model = neighbors.KNeighborsClassifier(n_neighbors=args.knn_neighbors, weights='distance')
         model.fit(emb_array, labels)
 
         # Create a list of class names
@@ -400,6 +400,12 @@ def parse_arguments(argv):
         help='Classifier algorithm.',
         default="kNN",
         choices=["SVM", "kNN"],
+    )
+    parser.add_argument(
+        '--knn-neighbors',
+        help='kNN neighbors count.',
+        type=int,
+        default=5,
     )
     parser.add_argument(
         '--use_split_dataset',
