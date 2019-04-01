@@ -283,11 +283,11 @@ def main(args):
         model = None
         print_fun('Classifier algorithm %s' % args.algorithm)
         update_data({'classifier_algorithm': args.algorithm}, use_mlboard, mlboard)
-        if args.algorithm == 'kNN':
+        if args.algorithm == 'SVM':
+            model = svm.SVC(kernel='linear', probability=True)
+        else:
             # n_neighbors = int(round(np.sqrt(len(emb_array))))
             model = neighbors.KNeighborsClassifier(n_neighbors=3, weights='distance')
-        else:
-            model = svm.SVC(kernel='linear', probability=True)
         model.fit(emb_array, labels)
 
         # Create a list of class names
@@ -392,7 +392,7 @@ def parse_arguments(argv):
     parser.add_argument(
         '--algorithm',
         help='Classifier algorithm.',
-        default="SVM",
+        default="kNN",
         choices=["SVM", "kNN"],
     )
     parser.add_argument(
