@@ -211,7 +211,6 @@ def openvino_detect(face_detect, frame, threshold):
     inference_frame = cv2.resize(frame, face_detect.input_size, interpolation=cv2.INTER_AREA)
     inference_frame = np.transpose(inference_frame, [2, 0, 1]).reshape(*face_detect.input_shape)
     outputs = face_detect(inference_frame)
-    print(outputs)
     outputs = outputs.reshape(-1, 7)
     bboxes_raw = outputs[outputs[:, 2] > threshold]
     bounding_boxes = bboxes_raw[:, 3:7]
