@@ -49,7 +49,7 @@ def get_parser():
     parser.add_argument(
         '--device',
         help='Device for openVINO.',
-        default="MYRIAD",
+        default="CPU",
         choices=["CPU", "MYRIAD"]
     )
     parser.add_argument(
