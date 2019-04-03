@@ -405,7 +405,7 @@ def parse_arguments(argv):
         '--knn-neighbors',
         help='kNN neighbors count.',
         type=int,
-        default=5,
+        default=1,
     )
     parser.add_argument(
         '--use_split_dataset',
