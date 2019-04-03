@@ -139,7 +139,7 @@ def main():
                     start_time = time.time()
                     frame_count = 0
 
-                facenet.process_frame(frame, args.threshold, frame_rate=frame_rate)
+                bounding_boxes, labels = facenet.process_frame(frame, args.threshold, frame_rate=frame_rate)
 
             frame_count += 1
             if args.image is None:

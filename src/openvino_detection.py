@@ -117,6 +117,7 @@ class OpenVINOFacenet(object):
             # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
 
         add_overlays(frame, bounding_boxes, frame_rate, labels=labels)
+        return bounding_boxes, labels
 
 
 def add_overlays(frame, boxes, frame_rate, labels=None):
@@ -129,7 +130,7 @@ def add_overlays(frame, boxes, frame_rate, labels=None):
                 (0, 255, 0), 2
             )
 
-    if frame_rate != 0:
+    if frame_rate is not None and frame_rate != 0:
         cv2.putText(
             frame, str(frame_rate) + " fps", (10, 30),
             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0),
@@ -138,6 +139,9 @@ def add_overlays(frame, boxes, frame_rate, labels=None):
 
     font = cv2.FONT_HERSHEY_SIMPLEX
     scale = 0.7
+    if frame.shape[0] > 1000:
+        scale = 1.0
+
     thickness = 1
     if labels:
         for l in labels:
