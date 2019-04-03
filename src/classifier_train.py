@@ -201,7 +201,7 @@ def main(args):
     nrof_batches_per_epoch = int(math.ceil(1.0 * nrof_images / args.batch_size))
     embeddings_size = nrof_images
     if args.noise:
-        embeddings_size += nrof_images * args.noise_count
+        embeddings_size += nrof_images * args.noise_count * (2 if args.flip else 1)
 
     if args.flip:
         embeddings_size += nrof_images * 1
@@ -213,8 +213,8 @@ def main(args):
         paths_batch = paths[start_index:end_index]
 
         if args.noise:
-            start_index += i * args.noise_count
-            end_index += i * args.noise_count
+            start_index += i * args.noise_count * (2 if args.flip else 1)
+            end_index += i * args.noise_count * (2 if args.flip else 1)
 
         if args.flip:
             start_index += i * 1
@@ -241,6 +241,20 @@ def main(args):
                     # Add image to list
                     images = np.concatenate((images, noised.reshape(1, *noised.shape)))
                     end_index += 1
+
+                    if args.flip:
+                        print_fun(
+                            'Applying flip to noised image {}, #{}'.format(
+                                paths_batch[k], i + 1
+                            )
+                        )
+                        flipped = facenet.horizontal_flip(noised)
+                        # Expand labels
+                        labels.insert(start_index+k, labels[start_index+k])
+                        # Add image to list
+                        images = np.concatenate((images, flipped.reshape(1, *flipped.shape)))
+                        end_index += 1
+
 
         if args.flip:
             for k in range(images_size):
