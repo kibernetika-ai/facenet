@@ -36,7 +36,7 @@ from ml_serving.drivers import driver
 import numpy as np
 import tensorflow as tf
 
-import camera_openvino as ko
+import openvino_detection
 import facenet
 
 # tf.logging.set_verbosity(tf.logging.INFO)
@@ -152,7 +152,7 @@ def main(args):
 
                     bounding_boxes = np.stack([bbs[num]])
 
-                    imgs = ko.get_images(
+                    imgs = openvino_detection.get_images(
                         img,
                         bounding_boxes,
                         face_crop_size=args.image_size,

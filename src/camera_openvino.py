@@ -1,15 +1,12 @@
 import argparse
 import logging
-import os
-import pickle
 import time
 
 import cv2
 import numpy as np
 from openvino import inference_engine as ie
-import six
 
-import openvino_nets as nets
+import openvino_detection
 import utils
 
 
@@ -49,6 +46,14 @@ def get_parser():
         choices=["CPU", "MYRIAD"]
     )
     parser.add_argument(
+        '--video',
+        help='Path to the source video file to be processed (or URL to camera).',
+    )
+    parser.add_argument(
+        '--output',
+        help='Path to the output (processed) video file to write to.',
+    )
+    parser.add_argument(
         '--camera-device',
         help='Lib for camera to use.',
         default="PI",
@@ -62,79 +67,6 @@ def get_parser():
     return parser
 
 
-def add_overlays(frame, boxes, frame_rate, labels=None):
-    if boxes is not None:
-        for face in boxes:
-            face_bb = face.astype(int)
-            cv2.rectangle(
-                frame,
-                (face_bb[0], face_bb[1]), (face_bb[2], face_bb[3]),
-                (0, 255, 0), 2
-            )
-
-    if frame_rate != 0:
-        cv2.putText(
-            frame, str(frame_rate) + " fps", (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0),
-            thickness=2, lineType=2
-        )
-
-    if labels:
-        for l in labels:
-            cv2.putText(
-                frame, l['label'], (l['left'], l['top'] - 5),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-                (0, 255, 0),
-                thickness=1, lineType=cv2.LINE_AA
-            )
-
-
-def get_images(image, bounding_boxes, face_crop_size=160, face_crop_margin=32, prewhiten=True):
-    images = []
-
-    nrof_faces = bounding_boxes.shape[0]
-    if nrof_faces > 0:
-        det = bounding_boxes[:, 0:4]
-        det_arr = []
-        img_size = np.asarray(image.shape)[0:2]
-        if nrof_faces > 1:
-            for i in range(nrof_faces):
-                det_arr.append(np.squeeze(det[i]))
-        else:
-            det_arr.append(np.squeeze(det))
-
-        for i, det in enumerate(det_arr):
-            det = np.squeeze(det)
-            bb = np.zeros(4, dtype=np.int32)
-            bb[0] = np.maximum(det[0] - face_crop_margin / 2, 0)
-            bb[1] = np.maximum(det[1] - face_crop_margin / 2, 0)
-            bb[2] = np.minimum(det[2] + face_crop_margin / 2, img_size[1])
-            bb[3] = np.minimum(det[3] + face_crop_margin / 2, img_size[0])
-            cropped = image[bb[1]:bb[3], bb[0]:bb[2], :]
-            scaled = cv2.resize(cropped, (face_crop_size, face_crop_size), interpolation=cv2.INTER_AREA)
-            if prewhiten:
-                images.append(utils.prewhiten(scaled))
-            else:
-                images.append(scaled)
-
-    return images
-
-
-def openvino_detect(face_detect, frame, threshold):
-    inference_frame = cv2.resize(frame, face_detect.input_size, interpolation=cv2.INTER_AREA)
-    inference_frame = np.transpose(inference_frame, [2, 0, 1]).reshape(*face_detect.input_shape)
-    outputs = face_detect(inference_frame)
-    outputs = outputs.reshape(-1, 7)
-    bboxes_raw = outputs[outputs[:, 2] > threshold]
-    bounding_boxes = bboxes_raw[:, 3:7]
-    bounding_boxes[:, 0] = bounding_boxes[:, 0] * frame.shape[1]
-    bounding_boxes[:, 2] = bounding_boxes[:, 2] * frame.shape[1]
-    bounding_boxes[:, 1] = bounding_boxes[:, 1] * frame.shape[0]
-    bounding_boxes[:, 3] = bounding_boxes[:, 3] * frame.shape[0]
-
-    return bounding_boxes
-
-
 def main():
     frame_interval = 3  # Number of frames after which to run face detection
     fps_display_interval = 3  # seconds
@@ -146,39 +78,12 @@ def main():
     args = parser.parse_args()
 
     use_classifier = bool(args.classifier)
-
-    extensions = os.environ.get('INTEL_EXTENSIONS_PATH')
-    plugin = ie.IEPlugin(device=args.device)
-
-    if extensions and "CPU" in args.device:
-        for ext in extensions.split(':'):
-            print("LOAD extension from {}".format(ext))
-            plugin.add_cpu_extension(ext)
-
-    print('Load FACE DETECTION')
-    face_path = args.face_detection_path
-    weights_file = face_path[:face_path.rfind('.')] + '.bin'
-    net = ie.IENetwork.from_ir(face_path, weights_file)
-    face_detect = nets.FaceDetect(plugin, net)
-
-    if use_classifier:
-        print('Load FACENET')
-
-        model_file = args.graph
-        weights_file = model_file[:model_file.rfind('.')] + '.bin'
-
-        net = ie.IENetwork.from_ir(model_file, weights_file)
-        facenet_input = list(net.inputs.keys())[0]
-        outputs = list(iter(net.outputs))
-        facenet_output = outputs[0]
-        face_net = plugin.load(net)
-
-        # Load classifier
-        with open(args.classifier, 'rb') as f:
-            opts = {'file': f}
-            if six.PY3:
-                opts['encoding'] = 'latin1'
-            (model, class_names) = pickle.load(**opts)
+    facenet = openvino_detection.OpenVINOFacenet(
+        args.device,
+        args.face_detection_path,
+        args.graph,
+        args.classifier
+    )
 
     # video_capture = cv2.VideoCapture(0)
     if args.image is None:
@@ -236,10 +141,6 @@ def main():
             # rgb_frame = frame
 
             if (frame_count % frame_interval) == 0:
-                # t = time.time()
-                bounding_boxes = openvino_detect(face_detect, frame, args.threshold)
-                # d = (time.time() - t) * 1000
-                # LOG.info('recognition: %.3fms' % d)
                 # Check our current fps
                 end_time = time.time()
                 if (end_time - start_time) > fps_display_interval:
@@ -247,57 +148,7 @@ def main():
                     start_time = time.time()
                     frame_count = 0
 
-                if use_classifier:
-                    # t = time.time()
-                    imgs = get_images(frame, bounding_boxes)
-                    labels = []
-                    for img_idx, img in enumerate(imgs):
-                        # Infer
-                        # t = time.time()
-                        img = img.transpose([2, 0, 1]).reshape([1, 3, 160, 160])
-                        output = face_net.infer(inputs={facenet_input: img})
-
-                        output = output[facenet_output]
-                        # output = face_net.infer({facenet_input: img})
-                        # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
-                        # output = output[facenet_output]
-                        try:
-                            output = output.reshape(1, 512)
-                            predictions = model.predict_proba(output)
-                        except ValueError as e:
-                            # Can not reshape
-                            print(
-                                "ERROR: Output from graph doesn't consistent"
-                                " with classifier model: %s" % e
-                            )
-                            continue
-
-                        best_class_indices = np.argmax(predictions, axis=1)
-                        best_class_probabilities = predictions[
-                            np.arange(len(best_class_indices)),
-                            best_class_indices
-                        ]
-
-                        for i in range(len(best_class_indices)):
-                            bb = bounding_boxes[img_idx].astype(int)
-                            text = '%.1f%% %s' % (
-                                best_class_probabilities[i] * 100,
-                                class_names[best_class_indices[i]]
-                            )
-                            labels.append({
-                                'label': text,
-                                'left': bb[0],
-                                'top': bb[1] - 5
-                            })
-                            # DEBUG
-                            print('%4d  %s: %.3f' % (
-                                i,
-                                class_names[best_class_indices[i]],
-                                best_class_probabilities[i])
-                            )
-                    # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
-
-            add_overlays(frame, bounding_boxes, frame_rate, labels=labels)
+                facenet.process_frame(frame, args.threshold, frame_rate=frame_rate)
 
             frame_count += 1
             if args.image is None:

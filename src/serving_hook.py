@@ -13,6 +13,7 @@ from sklearn import neighbors
 
 from align import detect_face
 import camera_openvino as ko
+import openvino_detection as od
 import openvino_nets as nets
 
 
@@ -24,7 +25,7 @@ PARAMS = {
     'classifier': '',
     'threshold': [0.6, 0.7, 0.7],
     'use_tf': False,
-    'use_face_detection': False,
+    'use_face_detection': True,
     'face_detection_path': '',
     'tf_path': '/tf-data'
 }
@@ -243,7 +244,7 @@ def preprocess(inputs, ctx, **kwargs):
     ctx.bounding_boxes = bounding_boxes
     ctx.frame = frame
 
-    imgs = ko.get_images(frame, bounding_boxes)
+    imgs = od.get_images(frame, bounding_boxes)
 
     if len(imgs) > 0:
         imgs = np.stack(imgs).transpose([0, 3, 1, 2])
