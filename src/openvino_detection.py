@@ -11,10 +11,12 @@ from sklearn import svm
 import openvino_nets as nets
 import utils
 
+from ml_serving.drivers import driver
 
 class OpenVINOFacenet(object):
-    def __init__(self, device, face_detection_path, facenet_path=None, classifier=None):
+    def __init__(self, device, face_detection_path, facenet_path=None, classifier=None, bg_remove_path=None):
         self.use_classifier = False
+        self.bg_remove = False
 
         extensions = os.environ.get('INTEL_EXTENSIONS_PATH')
         plugin = ie.IEPlugin(device=device)
@@ -59,8 +61,24 @@ class OpenVINOFacenet(object):
                 self.classifier = model
                 self.class_names = class_names
 
+        if bg_remove_path:
+            self.bg_remove = True
+            print('Load bg_remove model')
+            drv = driver.load_driver('tensorflow')
+            self.bg_remove_drv = drv()
+            self.bg_remove_drv.load_model(bg_remove_path)
+
     def process_frame(self, frame, threshold=0.5, frame_rate=None):
-        bounding_boxes = openvino_detect(self.face_detect, frame, threshold)
+
+        if self.bg_remove and self.bg_remove_drv:
+            input = cv2.resize(frame[:, :, ::-1].astype(np.float32), (160, 160)) / 255.0
+            outputs = self.bg_remove_drv.predict({'image': np.expand_dims(input, 0)})
+            mask = cv2.resize(outputs['output'][0], (frame.shape[1], frame.shape[0]))
+            bounding_boxes_frame = frame * np.expand_dims(mask, 2)
+        else:
+            bounding_boxes_frame = frame
+
+        bounding_boxes = openvino_detect(self.face_detect, bounding_boxes_frame, threshold)
 
         labels = []
         if self.use_classifier:
@@ -142,7 +160,7 @@ def add_overlays(frame, boxes, frame_rate, labels=None):
     if frame.shape[0] > 1000:
         scale = 1.0
 
-    thickness = 1
+    thickness = 2
     if labels:
         for l in labels:
             y_size = cv2.getTextSize(l['label'], font, scale, thickness=thickness)[0][1]
@@ -193,6 +211,7 @@ def openvino_detect(face_detect, frame, threshold):
     inference_frame = cv2.resize(frame, face_detect.input_size, interpolation=cv2.INTER_AREA)
     inference_frame = np.transpose(inference_frame, [2, 0, 1]).reshape(*face_detect.input_shape)
     outputs = face_detect(inference_frame)
+    print(outputs)
     outputs = outputs.reshape(-1, 7)
     bboxes_raw = outputs[outputs[:, 2] > threshold]
     bounding_boxes = bboxes_raw[:, 3:7]

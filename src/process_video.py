@@ -26,11 +26,6 @@ def get_parser():
         description='Test movidius'
     )
     parser.add_argument(
-        '--image',
-        default=None,
-        help='Image',
-    )
-    parser.add_argument(
         '--face-detection-path',
         default=None,
         help='Path to face-detection-retail openvino model',
@@ -71,6 +66,11 @@ def get_parser():
         default=False,
         action='store_true'
     )
+    parser.add_argument(
+        '--bg-remove-path',
+        help='Path to Tensorflow background remove model.',
+        default=None,
+    )
     return parser
 
 
@@ -82,7 +82,8 @@ def main():
         args.device,
         args.face_detection_path,
         args.graph,
-        args.classifier
+        args.classifier,
+        args.bg_remove_path,
     )
 
     video = cv2.VideoCapture(args.video)
