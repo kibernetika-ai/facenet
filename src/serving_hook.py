@@ -188,9 +188,11 @@ def preprocess(inputs, ctx, **kwargs):
         raise RuntimeError('Missing "input" key in inputs. Provide an image in "input" key')
 
     if len(image.shape) == 0:
-        image = [image.tolist()]
+        image = np.stack([image.tolist()])
 
-    image = cv2.imdecode(np.frombuffer(image[0], np.uint8), cv2.IMREAD_COLOR)
+    if len(image.shape) < 3:
+        image = cv2.imdecode(np.frombuffer(image[0], np.uint8), cv2.IMREAD_COLOR)
+
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     use_tf = PARAMS['use_tf']
@@ -322,7 +324,7 @@ def postprocess(outputs, ctx, **kwargs):
             }
         )
     if not ctx.skip:
-        ko.add_overlays(ctx.frame, ctx.bounding_boxes, 0, labels=labels)
+        od.add_overlays(ctx.frame, ctx.bounding_boxes, 0, labels=labels)
 
     # image_bytes = io.BytesIO()
 
