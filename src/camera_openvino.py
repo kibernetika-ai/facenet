@@ -46,14 +46,6 @@ def get_parser():
         choices=["CPU", "MYRIAD"]
     )
     parser.add_argument(
-        '--video',
-        help='Path to the source video file to be processed (or URL to camera).',
-    )
-    parser.add_argument(
-        '--output',
-        help='Path to the output (processed) video file to write to.',
-    )
-    parser.add_argument(
         '--camera-device',
         help='Lib for camera to use.',
         default="PI",
@@ -77,7 +69,6 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    use_classifier = bool(args.classifier)
     facenet = openvino_detection.OpenVINOFacenet(
         args.device,
         args.face_detection_path,

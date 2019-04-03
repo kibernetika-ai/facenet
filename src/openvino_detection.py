@@ -105,7 +105,8 @@ class OpenVINOFacenet(object):
                     labels.append({
                         'label': text,
                         'left': bb[0],
-                        'top': bb[1] - 5
+                        'top': bb[1] - 5,
+                        'bottom': bb[3] + 7
                     })
                     # DEBUG
                     print('%4d  %s: %.3f' % (
@@ -135,13 +136,21 @@ def add_overlays(frame, boxes, frame_rate, labels=None):
             thickness=2, lineType=2
         )
 
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = 0.7
+    thickness = 1
     if labels:
         for l in labels:
+            y_size = cv2.getTextSize(l['label'], font, scale, thickness=thickness)[0][1]
+            top = l['top'] - 5
+            if top < y_size:
+                top = l['bottom'] + y_size
+
             cv2.putText(
-                frame, l['label'], (l['left'], l['top'] - 5),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+                frame, l['label'], (l['left'], top),
+                font, scale,
                 (0, 255, 0),
-                thickness=1, lineType=cv2.LINE_AA
+                thickness=thickness, lineType=cv2.LINE_AA
             )
 
 
