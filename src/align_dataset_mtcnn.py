@@ -90,10 +90,9 @@ def main(args):
             random.shuffle(dataset)
         for cls in dataset:
             output_class_dir = os.path.join(output_dir, cls.name)
-            if not os.path.exists(output_class_dir):
-                os.makedirs(output_class_dir)
-                if args.random_order:
-                    random.shuffle(cls.image_paths)
+            output_class_dir_created = False
+            if args.random_order:
+                random.shuffle(cls.image_paths)
             for image_path in cls.image_paths:
                 nrof_images_total += 1
                 filename = os.path.splitext(os.path.split(image_path)[1])[0]
@@ -166,7 +165,12 @@ def main(args):
                         output_filename_n = "{}_{}{}".format(filename_base, i, file_extension)
 
                         text_file.write('%s %d %d %d %d\n' % (output_filename_n, bb[0], bb[1], bb[2], bb[3]))
+                        if not output_class_dir_created:
+                            output_class_dir_created = True
+                            if not os.path.exists(output_class_dir):
+                                os.makedirs(output_class_dir)
                         cv2.imwrite(output_filename_n, cropped)
+
 
     print_fun('Total number of images: %d' % nrof_images_total)
     print_fun('Number of successfully aligned images: %d' % nrof_successfully_aligned)
