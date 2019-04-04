@@ -70,6 +70,7 @@ def catalog_ref(name, ctype, version):
 
 def upload_model(use_mlboard, mlboard, classifier_path, model, version):
     if not use_mlboard or not mlboard:
+        print_fun("Skipped: no mlboard detected")
         return
 
     print_fun('Uploading model...')
@@ -325,15 +326,25 @@ def main(args):
 
         predictions = model.predict_proba(emb_array)
         best_class_indices = np.argmax(predictions, axis=1)
-        best_class_probabilities = predictions[np.arange(len(best_class_indices)), best_class_indices]
+        if isinstance(model, neighbors.KNeighborsClassifier):
+            param_name = 'distance'
+            clf_name = "knn"
+            (closest_distances, _) = model.kneighbors(emb_array)
+            eval_values = closest_distances[:, 0]
+        else:
+            param_name = 'probability'
+            clf_name = "svm"
+            eval_values = predictions[np.arange(len(best_class_indices)), best_class_indices]
 
         for i in range(len(best_class_indices)):
             predicted = best_class_indices[i]
             if predicted == labels[i]:
-                print_fun('%4d  %s: %.3f' % (i, class_names[predicted], best_class_probabilities[i]))
+                print_fun('%4d  %s: %s %.3f' % (
+                    i, class_names[predicted], param_name, eval_values[i],
+                ))
             else:
-                print_fun('%4d  %s: %.3f, wrong! Should be %s.' % (
-                    i, class_names[predicted], best_class_probabilities[i], class_names[labels[i]])
+                print_fun('%4d  %s: %s %.3f, WRONG! Should be %s.' % (
+                    i, class_names[predicted], param_name, eval_values[i], class_names[labels[i]]),
                 )
 
         accuracy = np.mean(np.equal(best_class_indices, labels))
@@ -351,7 +362,7 @@ def main(args):
 
         if args.upload_model and accuracy >= args.upload_threshold:
             timestamp = datetime.datetime.now().strftime('%s')
-            model_name = 'facenet-classifier'
+            model_name = 'facenet-classifier-%s' % clf_name
 
             if args.device == 'MYRIAD':
                 model_name = model_name + "-movidius"
