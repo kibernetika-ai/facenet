@@ -128,7 +128,7 @@ class OpenVINOFacenet(object):
                     })
                     # DEBUG
                     print('%4d  %s: %.3f' % (
-                        i,
+                        img_idx,
                         self.class_names[best_class_indices[i]],
                         best_class_probabilities[i])
                     )
