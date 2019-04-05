@@ -13,30 +13,33 @@ import utils
 
 from ml_serving.drivers import driver
 
+
 class OpenVINOFacenet(object):
-    def __init__(self, device, face_detection_path, facenet_path=None, classifier=None, bg_remove_path=None):
+    def __init__(self, args):
+
+        print(args)
         self.use_classifier = False
         self.bg_remove = False
 
         extensions = os.environ.get('INTEL_EXTENSIONS_PATH')
-        plugin = ie.IEPlugin(device=device)
+        plugin = ie.IEPlugin(device=args.device)
 
-        if extensions and "CPU" in device:
+        if extensions and "CPU" in args.device:
             for ext in extensions.split(':'):
                 print("LOAD extension from {}".format(ext))
                 plugin.add_cpu_extension(ext)
 
         print('Load FACE DETECTION')
-        face_path = face_detection_path
+        face_path = args.face_detection_path
         weights_file = face_path[:face_path.rfind('.')] + '.bin'
         net = ie.IENetwork(face_path, weights_file)
         self.face_detect = nets.FaceDetect(plugin, net)
 
-        if facenet_path and classifier:
+        if args.graph and args.classifier:
             self.use_classifier = True
             print('Load FACENET')
 
-            model_file = facenet_path
+            model_file = args.graph
             weights_file = model_file[:model_file.rfind('.')] + '.bin'
 
             net = ie.IENetwork(model_file, weights_file)
@@ -46,7 +49,7 @@ class OpenVINOFacenet(object):
             self.face_net = plugin.load(net)
 
             # Load classifier
-            with open(classifier, 'rb') as f:
+            with open(args.classifier, 'rb') as f:
                 opts = {'file': f}
                 if six.PY3:
                     opts['encoding'] = 'latin1'
@@ -59,12 +62,12 @@ class OpenVINOFacenet(object):
                     # try embedding_size = 512
                     self.embedding_size = 512
 
-        if bg_remove_path:
+        if args.bg_remove_path:
             self.bg_remove = True
             print('Load bg_remove model')
             drv = driver.load_driver('tensorflow')
             self.bg_remove_drv = drv()
-            self.bg_remove_drv.load_model(bg_remove_path)
+            self.bg_remove_drv.load_model(args.bg_remove_path)
 
     def process_frame(self, frame, threshold=0.5, frame_rate=None):
 

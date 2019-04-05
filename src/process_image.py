@@ -1,11 +1,9 @@
-import argparse
-import glob
+import args
 import logging
 import os
 
 import cv2
 import numpy as np
-from openvino import inference_engine as ie
 
 import openvino_detection
 
@@ -15,40 +13,12 @@ LOG = logging.getLogger(__name__)
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(
-        description='Test movidius'
-    )
-    parser.add_argument(
-        '--face-detection-path',
-        default=None,
-        help='Path to face-detection-retail openvino model',
-        required=True,
-    )
-    parser.add_argument(
-        '--classifier',
-        help='Path to classifier file.',
-    )
-    parser.add_argument(
-        '--device',
-        help='Device for openVINO.',
-        default="CPU",
-        choices=["CPU", "MYRIAD"]
-    )
+    parser = args.base_parser('Test movidius')
     parser.add_argument(
         '--images',
         nargs='*',
         help='Path to the source image files to be processed (can be mask).'
              'Output image\'s name will be named as input image with prefix \'processed_\'',
-    )
-    parser.add_argument(
-        '--graph',
-        help='Path to facenet openVINO graph.',
-        default='facenet.xml',
-    )
-    parser.add_argument(
-        '--bg-remove-path',
-        help='Path to Tensorflow background remove model.',
-        default=None,
     )
     return parser
 
@@ -61,13 +31,7 @@ def main():
         print("No input images specified")
         return
 
-    facenet = openvino_detection.OpenVINOFacenet(
-        args.device,
-        args.face_detection_path,
-        args.graph,
-        args.classifier,
-        args.bg_remove_path,
-    )
+    facenet = openvino_detection.OpenVINOFacenet(args)
 
     for img in args.images:
         try:

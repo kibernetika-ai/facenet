@@ -1,4 +1,4 @@
-import argparse
+import args
 import logging
 import time
 
@@ -15,19 +15,11 @@ LOG = logging.getLogger(__name__)
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(
-        description='Test movidius'
-    )
+    parser = args.base_parser('Test movidius')
     parser.add_argument(
         '--image',
         default=None,
         help='Image',
-    )
-    parser.add_argument(
-        '--face-detection-path',
-        default=None,
-        help='Path to face-detection-retail openvino model',
-        required=True,
     )
     parser.add_argument(
         '--threshold',
@@ -36,25 +28,10 @@ def get_parser():
         help='Threshold for detecting faces',
     )
     parser.add_argument(
-        '--classifier',
-        help='Path to classifier file.',
-    )
-    parser.add_argument(
-        '--device',
-        help='Device for openVINO.',
-        default="MYRIAD",
-        choices=["CPU", "MYRIAD"]
-    )
-    parser.add_argument(
         '--camera-device',
         help='Lib for camera to use.',
         default="PI",
         choices=["PI", "CV"]
-    )
-    parser.add_argument(
-        '--graph',
-        help='Path to facenet openVINO graph.',
-        default='facenet.xml',
     )
     return parser
 
@@ -69,12 +46,7 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    facenet = openvino_detection.OpenVINOFacenet(
-        args.device,
-        args.face_detection_path,
-        args.graph,
-        args.classifier
-    )
+    facenet = openvino_detection.OpenVINOFacenet(args)
 
     # video_capture = cv2.VideoCapture(0)
     if args.image is None:

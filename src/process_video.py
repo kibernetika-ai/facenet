@@ -1,4 +1,4 @@
-import argparse
+import args
 import datetime
 import logging
 import os
@@ -22,30 +22,12 @@ LOG = logging.getLogger(__name__)
 
 
 def get_parser():
-    parser = argparse.ArgumentParser(
-        description='Test movidius'
-    )
-    parser.add_argument(
-        '--face-detection-path',
-        default=None,
-        help='Path to face-detection-retail openvino model',
-        required=True,
-    )
+    parser = args.base_parser('Test movidius')
     parser.add_argument(
         '--threshold',
         type=float,
         default=0.5,
         help='Threshold for detecting faces',
-    )
-    parser.add_argument(
-        '--classifier',
-        help='Path to classifier file.',
-    )
-    parser.add_argument(
-        '--device',
-        help='Device for openVINO.',
-        default="CPU",
-        choices=["CPU", "MYRIAD"]
     )
     parser.add_argument(
         '--video',
@@ -56,20 +38,10 @@ def get_parser():
         help='Path to the output (processed) video file to write to.',
     )
     parser.add_argument(
-        '--graph',
-        help='Path to facenet openVINO graph.',
-        default='facenet.xml',
-    )
-    parser.add_argument(
         '--sound',
         help='include sound in the output video.',
         default=False,
         action='store_true'
-    )
-    parser.add_argument(
-        '--bg-remove-path',
-        help='Path to Tensorflow background remove model.',
-        default=None,
     )
     return parser
 
@@ -78,13 +50,7 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    facenet = openvino_detection.OpenVINOFacenet(
-        args.device,
-        args.face_detection_path,
-        args.graph,
-        args.classifier,
-        args.bg_remove_path,
-    )
+    facenet = openvino_detection.OpenVINOFacenet(args)
 
     video = cv2.VideoCapture(args.video)
     fps = video.get(cv2.CAP_PROP_FPS)
