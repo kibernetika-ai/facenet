@@ -89,7 +89,7 @@ def load_nets(**kwargs):
         model_path = PARAMS.get('face_detection_path')
         bin_path = model_path[:model_path.rfind('.')] + '.bin'
 
-        net = ie.IENetwork.from_ir(
+        net = ie.IENetwork(
             path.join(model_path),
             path.join(bin_path)
         )
