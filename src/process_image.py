@@ -25,12 +25,6 @@ def get_parser():
         required=True,
     )
     parser.add_argument(
-        '--threshold',
-        type=float,
-        default=0.5,
-        help='Threshold for detecting faces',
-    )
-    parser.add_argument(
         '--classifier',
         help='Path to classifier file.',
     )

@@ -50,16 +50,14 @@ class OpenVINOFacenet(object):
                 opts = {'file': f}
                 if six.PY3:
                     opts['encoding'] = 'latin1'
-                (model, class_names) = pickle.load(**opts)
-                if isinstance(model, svm.SVC):
-                    self.embedding_size = model.shape_fit_[1]
-                elif isinstance(model, neighbors.KNeighborsClassifier):
-                    self.embedding_size = model._fit_X.shape[1]
+                (self.classifier, self.class_names) = pickle.load(**opts)
+                if isinstance(self.classifier, svm.SVC):
+                    self.embedding_size = self.classifier.shape_fit_[1]
+                elif isinstance(self.classifier, neighbors.KNeighborsClassifier):
+                    self.embedding_size = self.classifier._fit_X.shape[1]
                 else:
                     # try embedding_size = 512
                     self.embedding_size = 512
-                self.classifier = model
-                self.class_names = class_names
 
         if bg_remove_path:
             self.bg_remove = True
@@ -78,12 +76,14 @@ class OpenVINOFacenet(object):
         else:
             bounding_boxes_frame = frame
 
-        bounding_boxes = openvino_detect(self.face_detect, bounding_boxes_frame, threshold)
+        bounding_boxes_detected = openvino_detect(self.face_detect, bounding_boxes_frame, threshold)
 
+        bounding_boxes = []
+        bounding_boxes_overlays = []
         labels = []
         if self.use_classifier:
             # t = time.time()
-            imgs = get_images(frame, bounding_boxes)
+            imgs = get_images(frame, bounding_boxes_detected)
 
             for img_idx, img in enumerate(imgs):
                 # Infer
@@ -108,44 +108,77 @@ class OpenVINOFacenet(object):
                     )
                     continue
 
+
                 best_class_indices = np.argmax(predictions, axis=1)
-                best_class_probabilities = predictions[
-                    np.arange(len(best_class_indices)),
-                    best_class_indices
-                ]
+
+                if isinstance(self.classifier, neighbors.KNeighborsClassifier):
+                    (closest_distances, _) = self.classifier.kneighbors(output)
+                    eval_values = closest_distances[:, 0]
+
+                    def is_skipped(value):
+                        return value > 0.9
+
+                    def is_recognized(value):
+                        return value <= 0.8
+                else:
+                    eval_values = predictions[np.arange(len(best_class_indices)), best_class_indices]
+
+                    def is_skipped(value):
+                        return value == 0
+
+                    def is_recognized(value):
+                        return value >= 30
+
 
                 for i in range(len(best_class_indices)):
-                    bb = bounding_boxes[img_idx].astype(int)
-                    text = '%.1f%% %s' % (
-                        best_class_probabilities[i] * 100,
-                        self.class_names[best_class_indices[i]]
-                    )
-                    labels.append({
-                        'label': text,
-                        'left': bb[0],
-                        'top': bb[1] - 5,
-                        'bottom': bb[3] + 7
+                    # skip low probability faces
+                    if is_skipped(eval_values[i]):
+                        continue
+
+                    bb = bounding_boxes_detected[img_idx].astype(int)
+                    color = (0, 0, 255)
+                    is_rec = is_recognized(eval_values[i])
+                    if is_rec:
+                        color = (0, 255, 0)
+                        label = {
+                            'label': '%.3f %s' % (
+                                # prob * 100,
+                                eval_values[i],
+                                self.class_names[best_class_indices[i]]
+                            ),
+                            'left': bb[0],
+                            'top': bb[1] - 5,
+                            'bottom': bb[3] + 7,
+                            'color': color,
+                        }
+                        labels.append(label)
+                    bounding_boxes.append(bb)
+                    bounding_boxes_overlays.append({
+                        'bb': bb,
+                        'thin': not is_rec,
+                        'color': color,
                     })
-                    # DEBUG
+
                     print('%4d  %s: %.3f' % (
                         img_idx,
                         self.class_names[best_class_indices[i]],
-                        best_class_probabilities[i])
+                        # prob,
+                        eval_values[i])
                     )
             # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
 
-        add_overlays(frame, bounding_boxes, frame_rate, labels=labels)
+        add_overlays(frame, bounding_boxes_overlays, frame_rate, labels=labels)
         return bounding_boxes, labels
 
 
 def add_overlays(frame, boxes, frame_rate, labels=None):
     if boxes is not None:
         for face in boxes:
-            face_bb = face.astype(int)
+            face_bb = face['bb'].astype(int)
             cv2.rectangle(
                 frame,
                 (face_bb[0], face_bb[1]), (face_bb[2], face_bb[3]),
-                (0, 255, 0), 2
+                face['color'], 1 if face['thin'] else 2,
             )
 
     if frame_rate is not None and frame_rate != 0:
@@ -171,7 +204,7 @@ def add_overlays(frame, boxes, frame_rate, labels=None):
             cv2.putText(
                 frame, l['label'], (l['left'], top),
                 font, scale,
-                (0, 255, 0),
+                l['color'],
                 thickness=thickness, lineType=cv2.LINE_AA
             )
 
