@@ -1,4 +1,5 @@
 import argparse
+import glob
 import logging
 import os
 
@@ -40,12 +41,10 @@ def get_parser():
         choices=["CPU", "MYRIAD"]
     )
     parser.add_argument(
-        '--image',
-        help='Path to the source image file to be processed.',
-    )
-    parser.add_argument(
-        '--output',
-        help='Path to the output (processed) image file to write to.',
+        '--images',
+        nargs='*',
+        help='Path to the source image files to be processed (can be mask).'
+             'Output image\'s name will be named as input image with prefix \'processed_\'',
     )
     parser.add_argument(
         '--graph',
@@ -64,6 +63,10 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
+    if len(args.images) == 0:
+        print("No input images specified")
+        return
+
     facenet = openvino_detection.OpenVINOFacenet(
         args.device,
         args.face_detection_path,
@@ -72,13 +75,22 @@ def main():
         args.bg_remove_path,
     )
 
-    image = cv2.imread(args.image, cv2.IMREAD_COLOR).astype(np.float32)
-    try:
-        os.remove(args.output)
-    except:
-        pass
-    facenet.process_frame(image)
-    cv2.imwrite(args.output, image)
+    for img in args.images:
+        try:
+            img_dir, img_filename = os.path.split(img)
+            img_name, img_extension = os.path.splitext(img_filename)
+            output = os.path.join(img_dir, "processed_%s%s" % (img_name, img_extension))
+            try:
+                os.remove(output)
+            except:
+                pass
+            image = cv2.imread(img, cv2.IMREAD_COLOR).astype(np.float32)
+            facenet.process_frame(image)
+            cv2.imwrite(output, image)
+            print("Image %s processed and saved to %s" % (img, output))
+        except Exception as e:
+            print("Image %s process error: %s" % (img, e))
+            pass
 
 
 if __name__ == "__main__":
