@@ -10,10 +10,6 @@ import tempfile
 import time
 
 import cv2
-import numpy as np
-from openvino import inference_engine as ie
-
-import utils
 
 
 logging.basicConfig(level=logging.INFO)
@@ -22,12 +18,6 @@ LOG = logging.getLogger(__name__)
 
 def get_parser():
     parser = openvino_args.base_parser('Test movidius')
-    parser.add_argument(
-        '--threshold',
-        type=float,
-        default=0.5,
-        help='Threshold for detecting faces',
-    )
     parser.add_argument(
         '--video',
         help='Path to the source video file to be processed (or URL to camera).',
@@ -39,7 +29,7 @@ def get_parser():
     )
     parser.add_argument(
         '--sound',
-        help='include sound in the output video.',
+        help='Include sound in the output video (with --output).',
         default=False,
         action='store_true'
     )
@@ -64,22 +54,24 @@ def main():
     except:
         pass
 
-    # Read codec information from input video.
-    ex = int(video.get(cv2.CAP_PROP_FOURCC))
-    codec = (
-            chr(ex & 0xFF) +
-            chr((ex & 0xFF00) >> 8) +
-            chr((ex & 0xFF0000) >> 16) +
-            chr((ex & 0xFF000000) >> 24)
-    )
+    if args.output is not None:
+        # Read codec information from input video.
+        ex = int(video.get(cv2.CAP_PROP_FOURCC))
+        codec = (
+                chr(ex & 0xFF) +
+                chr((ex & 0xFF00) >> 8) +
+                chr((ex & 0xFF0000) >> 16) +
+                chr((ex & 0xFF000000) >> 24)
+        )
 
-    # cuda = built_with_cuda()
-    # if not cuda:
-    #     codec = 'MP4V'
+        # cuda = built_with_cuda()
+        # if not cuda:
+        #     codec = 'MP4V'
 
-    print('Create video %sx%s with FPS %s and CODEC=%s' % (width, height, fps, codec))
-    fourcc = cv2.VideoWriter_fourcc(*codec)
-    output_movie = cv2.VideoWriter(args.output, fourcc, fps, (width, height))
+        print('Create video %sx%s with FPS %s and CODEC=%s' % (width, height, fps, codec))
+        fourcc = cv2.VideoWriter_fourcc(*codec)
+        output_movie = cv2.VideoWriter(args.output, fourcc, fps, (width, height))
+
     frame_number = 0
 
     def get_frame():
@@ -110,7 +102,14 @@ def main():
                 # Write the resulting image to the output video file
                 print("Writing frame {} / {}".format(frame_number, length))
 
-            output_movie.write(frame)
+            if args.output is None:
+                cv2.imshow('Video', frame)
+                key = cv2.waitKey(1)
+                # Wait 'q' or Esc or 'q' in russian layout
+                if key in [ord('q'), 202, 27]:
+                    break
+            else:
+                output_movie.write(frame)
 
             frame_number += 1
 
@@ -120,12 +119,13 @@ def main():
     # When everything is done, release the capture
     video.release()
     cv2.destroyAllWindows()
-    output_movie.release()
+    if args.output is not None:
+        output_movie.release()
     print('Finished')
 
     logging.info('End video processing: %s', datetime.datetime.now())
 
-    if args.sound:
+    if args.output is not None and args.sound:
         time.sleep(0.2)
         logging.info('Start merge audio: %s', datetime.datetime.now())
         merge_audio_with(args.video, args.output)
