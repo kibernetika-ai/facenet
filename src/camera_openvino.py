@@ -35,7 +35,7 @@ def get_parser():
 
 
 def main():
-    frame_interval = 1  # Number of frames after which to run face detection
+    frame_interval = 3  # Number of frames after which to run face detection
     fps_display_interval = 3  # seconds
     frame_rate = 0
     frame_count = 0
@@ -109,20 +109,20 @@ def main():
                     start_time = time.time()
                     frame_count = 0
 
-                bounding_boxes, labels = facenet.process_frame(frame, args.threshold, frame_rate=frame_rate)
+            bounding_boxes, labels = facenet.process_frame(frame, args.threshold, frame_rate=frame_rate)
 
             frame_count += 1
             if args.image is None:
                 cv2.imshow('Video', frame)
+                key = cv2.waitKey(1)
+                # Wait 'q' or Esc or 'q' in russian layout
+                if key in [ord('q'), 202, 27]:
+                    break
             else:
                 print(bounding_boxes)
                 print(labels)
                 break
 
-            key = cv2.waitKey(1)
-            # Wait 'q' or Esc or 'q' in russian layout
-            if key in [ord('q'), 202, 27]:
-                break
 
     except (KeyboardInterrupt, SystemExit) as e:
         print('Caught %s: %s' % (e.__class__.__name__, e))
