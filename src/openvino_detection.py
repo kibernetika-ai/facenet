@@ -222,7 +222,7 @@ class OpenVINOFacenet(object):
         return bounding_boxes, labels
 
 
-def add_overlays(frame, boxes, frame_rate=None, labels=None):
+def add_overlays(frame, boxes, frame_rate=None, labels=None, align_to_right=True):
     if boxes is not None:
         for face in boxes:
             face_bb = face['bb'].astype(int)
@@ -232,20 +232,21 @@ def add_overlays(frame, boxes, frame_rate=None, labels=None):
                 face['color'], 1 if face['thin'] else 2,
             )
 
-    if frame_rate is not None and frame_rate != 0:
-        cv2.putText(
-            frame, str(frame_rate) + " fps", (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0),
-            thickness=2, lineType=2
-        )
-
+    frame_avg = (frame.shape[1] + frame.shape[0]) / 2
     font = cv2.FONT_HERSHEY_SIMPLEX
-    scale = 0.7
-    if frame.shape[0] > 1000:
-        scale = 1.0
+    font_size = frame_avg / 1300
+    font_thickness = 2 if frame_avg > 1000 else 1
+    font_inner_padding_w, font_inner_padding_h = 5, 5
 
-    thickness = 2
-    align_to_right = False
+    if frame_rate is not None and frame_rate != 0:
+        fps_txt = "%d fps" % frame_rate
+        _, flh = cv2.getTextSize(fps_txt, font, font_size, thickness=font_thickness)[0]
+        cv2.putText(
+            frame, fps_txt,
+            (font_inner_padding_w, font_inner_padding_h + flh),
+            font, font_size, (0, 255, 0),
+            thickness=font_thickness, lineType=2
+        )
 
     if labels:
         for l in labels:
@@ -253,39 +254,38 @@ def add_overlays(frame, boxes, frame_rate=None, labels=None):
             str_w, str_h = 0, 0
             widths = []
             for i, line in enumerate(strs):
-                lw, lh = cv2.getTextSize(line, font, scale, thickness=thickness)[0]
+                lw, lh = cv2.getTextSize(line, font, font_size, thickness=font_thickness)[0]
                 str_w = max(str_w, lw)
                 str_h = max(str_h, lh)
                 widths.append(lw)
             str_h = int(str_h * 1.6) # line height
 
+            to_right = l['left'] + str_w > frame.shape[1] - font_inner_padding_w
+
             top = l['top'] - int((len(strs) - 0.5) * str_h)
-            if top < str_h:
-                top = l['bottom'] + int(str_h * 1.2)
+            if top < str_h + font_inner_padding_h:
+                top = min(l['bottom'] + int(str_h * 1.2), frame.shape[0] - str_h * len(strs) + font_inner_padding_h)
 
-            to_right = l['left'] + str_w > frame.shape[1]
-
-            str_height = int(cv2.getTextSize(l['label'], font, scale, thickness=thickness)[0][1] * 1.6)
-            top = l['top'] - int((len(strs) - 0.5) * str_height)
-            if top < str_height:
-                top = l['bottom'] + int(str_height * 1.2)
             for i, line in enumerate(strs):
                 if align_to_right:
                     # all align to right box border
-                    left = (l['right'] - widths[i]) if to_right else l['left']
+                    left = (l['right'] - widths[i] - font_inner_padding_w) if to_right else l['left'] + font_inner_padding_w
                 else:
                     # move left each string if it's ending not places on the frame
-                    left = frame.shape[1] - widths[i] if l['left'] + widths[i] > frame.shape[1] else l['left']
+                    left = frame.shape[1] - widths[i] - font_inner_padding_w \
+                        if l['left'] + widths[i] > frame.shape[1] - font_inner_padding_w \
+                        else l['left'] + font_inner_padding_w
 
                 cv2.putText(
                     frame, line,
                     (
                         left,
-                        int(top + i * str_height),
+                        int(top + i * str_h),
                     ),
-                    font, scale,
+                    font,
+                    font_size,
                     l['color'],
-                    thickness=thickness, lineType=cv2.LINE_AA
+                    thickness=font_thickness, lineType=cv2.LINE_AA
                 )
 
 
