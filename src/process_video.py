@@ -1,4 +1,4 @@
-import args
+import openvino_args
 import datetime
 import logging
 import os
@@ -13,7 +13,6 @@ import cv2
 import numpy as np
 from openvino import inference_engine as ie
 
-import openvino_detection
 import utils
 
 
@@ -22,7 +21,7 @@ LOG = logging.getLogger(__name__)
 
 
 def get_parser():
-    parser = args.base_parser('Test movidius')
+    parser = openvino_args.base_parser('Test movidius')
     parser.add_argument(
         '--threshold',
         type=float,
@@ -35,6 +34,7 @@ def get_parser():
     )
     parser.add_argument(
         '--output',
+        default=None,
         help='Path to the output (processed) video file to write to.',
     )
     parser.add_argument(
@@ -50,7 +50,7 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    facenet = openvino_detection.OpenVINOFacenet(args)
+    facenet = openvino_args.OpenVINOFacenet(args)
 
     video = cv2.VideoCapture(args.video)
     fps = video.get(cv2.CAP_PROP_FPS)

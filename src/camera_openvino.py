@@ -1,12 +1,10 @@
-import args
+import openvino_args
 import logging
 import time
 
 import cv2
 import numpy as np
-from openvino import inference_engine as ie
 
-import openvino_detection
 import utils
 
 
@@ -15,7 +13,7 @@ LOG = logging.getLogger(__name__)
 
 
 def get_parser():
-    parser = args.base_parser('Test movidius')
+    parser = openvino_args.base_parser('Test movidius')
     parser.add_argument(
         '--image',
         default=None,
@@ -37,7 +35,7 @@ def get_parser():
 
 
 def main():
-    frame_interval = 3  # Number of frames after which to run face detection
+    frame_interval = 1  # Number of frames after which to run face detection
     fps_display_interval = 3  # seconds
     frame_rate = 0
     frame_count = 0
@@ -46,7 +44,7 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    facenet = openvino_detection.OpenVINOFacenet(args)
+    facenet = openvino_args.OpenVINOFacenet(args)
 
     # video_capture = cv2.VideoCapture(0)
     if args.image is None:

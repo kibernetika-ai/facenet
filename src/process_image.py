@@ -1,11 +1,9 @@
-import args
+import openvino_args
 import logging
 import os
 
 import cv2
 import numpy as np
-
-import openvino_detection
 
 
 logging.basicConfig(level=logging.INFO)
@@ -13,7 +11,7 @@ LOG = logging.getLogger(__name__)
 
 
 def get_parser():
-    parser = args.base_parser('Test movidius')
+    parser = openvino_args.base_parser('Test movidius')
     parser.add_argument(
         '--images',
         nargs='*',
@@ -31,7 +29,7 @@ def main():
         print("No input images specified")
         return
 
-    facenet = openvino_detection.OpenVINOFacenet(args)
+    facenet = openvino_args.OpenVINOFacenet(args)
 
     for img in args.images:
         try:
@@ -45,7 +43,7 @@ def main():
             image = cv2.imread(img, cv2.IMREAD_COLOR).astype(np.float32)
             facenet.process_frame(image)
             cv2.imwrite(output, image)
-            print("Image %s processed and saved to %s" % (img, output))
+            print("Image %s processed" % img)
         except Exception as e:
             print("Image %s process error: %s" % (img, e))
             pass
