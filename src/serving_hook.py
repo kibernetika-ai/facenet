@@ -1,21 +1,15 @@
 import base64
 import json
 import logging
-from os import path
-import pickle
 
 import cv2
 import numpy as np
 from openvino import inference_engine as ie
-import six
-from sklearn import svm
-from sklearn import neighbors
 
 from align import detect_face
 import camera_openvino as ko
 import openvino_detection as od
 import openvino_nets as nets
-
 
 LOG = logging.getLogger(__name__)
 PARAMS = {
@@ -35,10 +29,7 @@ net_loaded = False
 pnets = None
 rnet = None
 onet = None
-model = None
-face_detect = None
-class_names = None
-embedding_size = 0
+openvino_facenet: od.OpenVINOFacenet = None
 
 
 def boolean_string(s):
@@ -85,16 +76,14 @@ def load_nets(**kwargs):
         pnets, rnet, onet = detect_face.create_mtcnn(sess, model_path)
     elif use_face:
         LOG.info('Load FACE DETECTION')
-        plugin = kwargs.get('plugin')
-        model_path = PARAMS.get('face_detection_path')
-        bin_path = model_path[:model_path.rfind('.')] + '.bin'
-
-        net = ie.IENetwork(
-            path.join(model_path),
-            path.join(bin_path)
+        global openvino_facenet
+        openvino_facenet = od.OpenVINOFacenet(
+            kwargs.get('device'),
+            PARAMS.get('face_detection_path'),
+            facenet_path=None,
+            classifier=[PARAMS['classifier']],
+            loaded_plugin=kwargs.get('plugin'),
         )
-        global face_detect
-        face_detect = nets.FaceDetect(plugin, net)
     else:
         plugin = kwargs.get('plugin')
         model_dir = PARAMS.get('align_model_dir')
@@ -125,23 +114,6 @@ def load_nets(**kwargs):
             pnets_proxy, rnet_proxy, onet_proxy, onet_batch_size
         )
 
-    LOG.info('Load classifier')
-    with open(PARAMS['classifier'], 'rb') as f:
-        global model
-        global class_names
-        global embedding_size
-        opts = {'file': f}
-        if six.PY3:
-            opts['encoding'] = 'latin1'
-        (model, class_names) = pickle.load(**opts)
-        if isinstance(model, svm.SVC):
-            embedding_size = model.shape_fit_[1]
-        elif isinstance(model, neighbors.KNeighborsClassifier):
-            embedding_size = model._fit_X.shape[1]
-        else:
-            # try embedding_size = 512
-            embedding_size = 512
-
     LOG.info('Done.')
 
 
@@ -171,7 +143,7 @@ def image_resize(image, width=None, height=None, inter=cv2.INTER_AREA):
         dim = (width, int(h * r))
 
     # resize the image
-    resized = cv2.resize(image, dim, interpolation = inter)
+    resized = cv2.resize(image, dim, interpolation=inter)
 
     # return the resized image
     return resized
@@ -207,10 +179,10 @@ def preprocess(inputs, ctx, **kwargs):
             frame = image_resize(image, width=width)
             scaled = (float(width) / image.shape[1], float(height) / image.shape[0])
     elif use_face:
-        data = cv2.resize(image, (300, 300), interpolation=cv2.INTER_AREA)
-        data = data.transpose([2, 0, 1]).reshape(1, 3, 300, 300)
+        # data = cv2.resize(image, (300, 300), interpolation=cv2.INTER_AREA)
+        # data = data.transpose([2, 0, 1]).reshape(1, 3, 300, 300)
         # convert to BGR
-        data = data[:, ::-1, :, :]
+        data = image[:, :, ::-1]
         frame = image
     else:
         if image.shape[0] != height or image.shape[1] != width:
@@ -224,20 +196,7 @@ def preprocess(inputs, ctx, **kwargs):
             frame, 20, pnets, rnet, onet, PARAMS['threshold'], 0.709
         )
     elif use_face:
-        raw = face_detect(data).reshape([-1, 7])
-        # 7 values:
-        # class_id, label, confidence, x_min, y_min, x_max, y_max
-        # Select boxes where confidence > factor
-        bboxes_raw = raw[raw[:, 2] > PARAMS['threshold'][0]]
-        bboxes_raw[:, 3] = bboxes_raw[:, 3] * image.shape[1]
-        bboxes_raw[:, 5] = bboxes_raw[:, 5] * image.shape[1]
-        bboxes_raw[:, 4] = bboxes_raw[:, 4] * image.shape[0]
-        bboxes_raw[:, 6] = bboxes_raw[:, 6] * image.shape[0]
-
-        bounding_boxes = np.zeros([len(bboxes_raw), 5])
-
-        bounding_boxes[:, 0:4] = bboxes_raw[:, 3:7]
-        bounding_boxes[:, 4] = bboxes_raw[:, 2]
+        bounding_boxes = openvino_facenet.detect_faces(data, PARAMS['threshold'][0])
     else:
         bounding_boxes, _ = detect_face.detect_face_openvino(
             frame, pnets, rnet, onet, PARAMS['threshold']
@@ -264,46 +223,23 @@ def postprocess(outputs, ctx, **kwargs):
     LOG.info('output shape = {}'.format(facenet_output.shape))
 
     labels = []
+    box_overlays = []
     scores_out = []
-    table_text = []
     for img_idx, item_output in enumerate(facenet_output):
         if ctx.skip:
             break
 
-        output = item_output.reshape(1, embedding_size)
-        predictions = model.predict_proba(output)
-
-        best_class_indices = np.argmax(predictions, axis=1)
-        best_class_probabilities = predictions[
-            np.arange(len(best_class_indices)),
-            best_class_indices
-        ]
-
-        for i in range(len(best_class_indices)):
-            bb = ctx.bounding_boxes[img_idx].astype(int)
-            text = '%.1f%% %s' % (
-                best_class_probabilities[i] * 100,
-                class_names[best_class_indices[i]]
-            )
-            table_text.append(class_names[best_class_indices[i]])
-            scores_out.append(float(best_class_probabilities[i]))
-            labels.append({
-                'label': text,
-                'left': bb[0],
-                'top': bb[1] - 5
-            })
-            # DEBUG
-            LOG.info('%2d. %s: %.3f' % (
-                img_idx,
-                class_names[best_class_indices[i]],
-                best_class_probabilities[i])
-            )
+        box_overlay, label = openvino_facenet.process_output(
+            item_output, ctx.bounding_boxes[img_idx]
+        )
+        box_overlays.extend(box_overlay)
+        labels.extend(label)
 
     table = []
     text_labels = [l['label'] for l in labels]
     for i, b in enumerate(ctx.bounding_boxes):
-        x_min = int(max(0,b[0]))
-        y_min = int(max(0,b[1]))
+        x_min = int(max(0, b[0]))
+        y_min = int(max(0, b[1]))
         x_max = int(min(ctx.frame.shape[1], b[2]))
         y_max = int(min(ctx.frame.shape[0], b[3]))
         cim = ctx.frame[y_min:y_max, x_min:x_max]
@@ -311,27 +247,20 @@ def postprocess(outputs, ctx, **kwargs):
         cim = cv2.cvtColor(cim, cv2.COLOR_RGB2BGR)
         image_bytes = cv2.imencode(".jpg", cim, params=[cv2.IMWRITE_JPEG_QUALITY, 95])[1].tostring()
 
-        # im = Image.fromarray(cim)
-        # im.save(image_bytes, format='JPEG')
-
         encoded = base64.encodebytes(image_bytes).decode()
         table.append(
             {
                 'type': 'text',
-                'name': table_text[i],
-                'prob': float(scores_out[i]),
+                'name': text_labels[i],
+                'prob': float(0.0),
                 'image': encoded
             }
         )
     if not ctx.skip:
-        od.add_overlays(ctx.frame, ctx.bounding_boxes, 0, labels=labels)
-
-    # image_bytes = io.BytesIO()
+        od.add_overlays(ctx.frame, box_overlays, 0, labels=labels)
 
     ctx.frame = cv2.cvtColor(ctx.frame, cv2.COLOR_RGB2BGR)
     image_bytes = cv2.imencode(".jpg", ctx.frame, params=[cv2.IMWRITE_JPEG_QUALITY, 95])[1].tostring()
-    # im = Image.fromarray(ctx.frame)
-    # im.save(image_bytes, format='JPEG')
 
     return {
         'output': image_bytes,
@@ -339,4 +268,3 @@ def postprocess(outputs, ctx, **kwargs):
         'labels': np.array(text_labels, dtype=np.string_),
         'table_output': json.dumps(table),
     }
-

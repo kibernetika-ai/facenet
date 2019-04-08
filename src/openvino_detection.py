@@ -22,6 +22,7 @@ class OpenVINOFacenet(object):
             facenet_path=None,
             classifier=None,
             bg_remove_path=None,
+            loaded_plugin=None,
             debug=False):
 
         self.use_classifiers = False
@@ -29,7 +30,10 @@ class OpenVINOFacenet(object):
         self.debug = debug
 
         extensions = os.environ.get('INTEL_EXTENSIONS_PATH')
-        plugin = ie.IEPlugin(device=device)
+        if loaded_plugin is not None:
+            plugin = loaded_plugin
+        else:
+            plugin = ie.IEPlugin(device=device)
 
         if extensions and "CPU" in device:
             for ext in extensions.split(':'):
@@ -42,8 +46,7 @@ class OpenVINOFacenet(object):
         net = ie.IENetwork(face_path, weights_file)
         self.face_detect = nets.FaceDetect(plugin, net)
 
-        if facenet_path and classifier and len(classifier) > 0:
-            self.use_classifiers = True
+        if facenet_path:
             print('Load FACENET')
 
             model_file = facenet_path
@@ -55,6 +58,8 @@ class OpenVINOFacenet(object):
             self.facenet_output = outputs[0]
             self.face_net = plugin.load(net)
 
+        if classifier and len(classifier) > 0:
+            self.use_classifiers = bool(facenet_path)
             self.classifiers = []
             self.classifier_names = []
             self.embedding_sizes = []
@@ -100,8 +105,7 @@ class OpenVINOFacenet(object):
             self.bg_remove_drv = drv()
             self.bg_remove_drv.load_model(bg_remove_path)
 
-    def process_frame(self, frame, threshold=0.5, frame_rate=None, overlays=True):
-
+    def detect_faces(self, frame, threshold=0.5):
         if self.bg_remove and self.bg_remove_drv:
             input = cv2.resize(frame[:, :, ::-1].astype(np.float32), (160, 160)) / 255.0
             outputs = self.bg_remove_drv.predict({'image': np.expand_dims(input, 0)})
@@ -110,9 +114,136 @@ class OpenVINOFacenet(object):
         else:
             bounding_boxes_frame = frame
 
-        bounding_boxes_detected = openvino_detect(self.face_detect, bounding_boxes_frame, threshold)
+        return openvino_detect(self.face_detect, bounding_boxes_frame, threshold)
 
+    def inference_facenet(self, img):
+        output = self.face_net.infer(inputs={self.facenet_input: img})
+
+        return output[self.facenet_output]
+
+    def process_output(self, output, bbox):
+        detected_indicies = []
         bounding_boxes = []
+        bounding_boxes_overlays = []
+        labels = []
+        label_strings = []
+
+        for clfi, clf in enumerate(self.classifiers):
+
+            try:
+                output = output.reshape(1, self.embedding_sizes[clfi])
+                predictions = clf.predict_proba(output)
+            except ValueError as e:
+                # Can not reshape
+                print(
+                    "ERROR: Output from graph doesn't consistent"
+                    " with classifier model: %s" % e
+                )
+                continue
+
+            best_class_indices = np.argmax(predictions, axis=1)
+
+            if isinstance(clf, neighbors.KNeighborsClassifier):
+
+                (closest_distances, neighbors_indices) = clf.kneighbors(output, n_neighbors=30)
+                eval_values = closest_distances[:, 0]
+
+                def get_label(idx):
+                    if not self.debug:
+                        return self.class_names[best_class_indices[idx]]
+                    first_cnt = 1
+                    for i in neighbors_indices[0]:
+                        if clf._y[i] != best_class_indices[idx]:
+                            break
+                        first_cnt += 1
+                    cnt = len(clf._y[clf._y == best_class_indices[idx]])
+                    return '%s (%.3f %d/%d %.1f%%)' % (
+                        self.class_names[best_class_indices[idx]],
+                        eval_values[idx],
+                        first_cnt, cnt,
+                        first_cnt / cnt * 100,
+                    )
+
+                def is_skipped(value):
+                    if self.debug:
+                        return False
+                    return value > 0.9
+
+                def is_recognized(value):
+                    return value <= 0.8
+
+            else:
+
+                eval_values = predictions[np.arange(len(best_class_indices)), best_class_indices]
+
+                def get_label(idx):
+                    if not self.debug:
+                        return self.class_names[best_class_indices[idx]]
+                    return '%s (%.1f%%)' % (
+                        self.class_names[best_class_indices[idx]],
+                        eval_values[idx] * 100,
+                    )
+
+                def is_skipped(value):
+                    if self.debug:
+                        return False
+                    return value == 0
+
+                def is_recognized(value):
+                    return value >= 30
+
+            for i in range(len(best_class_indices)):
+
+                detected_indicies.append(best_class_indices[i])
+
+                label = get_label(i)
+                # if self.debug:
+                #     if is_skipped(eval_values[i]):
+                #         act = "skippd"
+                #     elif is_recognized(eval_values[i]):
+                #         act = "recogn"
+                #     else:
+                #         act = "detect"
+                #     label = "%s %s" % (act, label)
+                if self.debug and len(self.classifier_names) > 1:
+                    label = '%s: %s' % (self.classifier_names[clfi], label)
+                label_strings.append(label)
+                print(label)
+
+        thin = not self.debug and len(set(detected_indicies)) > 1
+        color = (0, 0, 255) if thin else (0, 255, 0)
+
+        bb = bbox.astype(int)
+        bounding_boxes.append(bb)
+        bounding_boxes_overlays.append({
+            'bb': bb,
+            'thin': thin,
+            'color': color,
+        })
+
+        overlay_label = ""
+        if self.debug:
+            if len(label_strings) > 0:
+                overlay_label = "\n".join(label_strings)
+        else:
+            if len(set(detected_indicies)) == 1:
+                overlay_label = label_strings[0]
+
+        if overlay_label != "":
+            labels.append({
+                'label': overlay_label,
+                'left': bb[0],
+                'top': bb[1],
+                'right': bb[2],
+                'bottom': bb[3],
+                'color': color,
+            })
+
+        return bounding_boxes_overlays, labels
+
+    def process_frame(self, frame, threshold=0.5, frame_rate=None, overlays=True):
+        bounding_boxes_detected = self.detect_faces(frame, threshold)
+
         bounding_boxes_overlays = []
         labels = []
         if self.use_classifiers:
@@ -128,125 +259,13 @@ class OpenVINOFacenet(object):
                 # Convert BGR to RGB
                 img = img[:, :, ::-1]
                 img = img.transpose([2, 0, 1]).reshape([1, 3, 160, 160])
-                output = self.face_net.infer(inputs={self.facenet_input: img})
-
-                output = output[self.facenet_output]
-                # output = face_net.infer({facenet_input: img})
+                output = self.inference_facenet(img)
                 # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
                 # output = output[facenet_output]
 
-                detected_indicies = []
-
-                for clfi, clf in enumerate(self.classifiers):
-
-                    try:
-                        output = output.reshape(1, self.embedding_sizes[clfi])
-                        predictions = clf.predict_proba(output)
-                    except ValueError as e:
-                        # Can not reshape
-                        print(
-                            "ERROR: Output from graph doesn't consistent"
-                            " with classifier model: %s" % e
-                        )
-                        continue
-
-                    best_class_indices = np.argmax(predictions, axis=1)
-
-                    if isinstance(clf, neighbors.KNeighborsClassifier):
-
-                        (closest_distances, neighbors_indices) = clf.kneighbors(output, n_neighbors=30)
-                        eval_values = closest_distances[:, 0]
-
-                        def get_label(idx):
-                            if not self.debug:
-                                return self.class_names[best_class_indices[idx]]
-                            first_cnt = 1
-                            for i in neighbors_indices[0]:
-                                if clf._y[i] != best_class_indices[idx]:
-                                    break
-                                first_cnt += 1
-                            cnt = len(clf._y[clf._y == best_class_indices[idx]])
-                            return '%s (%.3f %d/%d %.1f%%)' % (
-                                self.class_names[best_class_indices[idx]],
-                                eval_values[idx],
-                                first_cnt , cnt,
-                                first_cnt / cnt * 100,
-                            )
-
-                        def is_skipped(value):
-                            if self.debug:
-                                return False
-                            return value > 0.9
-
-                        def is_recognized(value):
-                            return value <= 0.8
-
-                    else:
-
-                        eval_values = predictions[np.arange(len(best_class_indices)), best_class_indices]
-
-                        def get_label(idx):
-                            if not self.debug:
-                                return self.class_names[best_class_indices[idx]]
-                            return '%s (%.1f%%)' % (
-                                self.class_names[best_class_indices[idx]],
-                                eval_values[idx] * 100,
-                            )
-
-                        def is_skipped(value):
-                            if self.debug:
-                                return False
-                            return value == 0
-
-                        def is_recognized(value):
-                            return value >= 30
-
-                    for i in range(len(best_class_indices)):
-
-                        detected_indicies.append(best_class_indices[i])
-
-                        label = get_label(i)
-                        # if self.debug:
-                        #     if is_skipped(eval_values[i]):
-                        #         act = "skippd"
-                        #     elif is_recognized(eval_values[i]):
-                        #         act = "recogn"
-                        #     else:
-                        #         act = "detect"
-                        #     label = "%s %s" % (act, label)
-                        if self.debug and len(self.classifier_names) > 1:
-                            label = '%s: %s' % (self.classifier_names[clfi], label)
-                        label_strings.append(label)
-                        print(label)
-
-                thin = not self.debug and len(set(detected_indicies)) > 1
-                color = (0, 0, 255) if thin else (0, 255, 0)
-
-                bb = bounding_boxes_detected[img_idx].astype(int)
-                bounding_boxes.append(bb)
-                bounding_boxes_overlays.append({
-                    'bb': bb,
-                    'thin': thin,
-                    'color': color,
-                })
-
-                overlay_label = ""
-                if self.debug:
-                    if len(label_strings) > 0:
-                        overlay_label = "\n".join(label_strings)
-                else:
-                    if len(set(detected_indicies)) == 1:
-                        overlay_label = label_strings[0]
-
-                if overlay_label != "":
-                    labels.append({
-                        'label': overlay_label,
-                        'left': bb[0],
-                        'top': bb[1],
-                        'right': bb[2],
-                        'bottom': bb[3],
-                        'color': color,
-                    })
+                face_overlay, face_labels = self.process_output(output, bounding_boxes_detected[img_idx])
+                bounding_boxes_overlays.extend(face_overlay)
+                labels.extend(face_labels)
 
         # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
         if overlays:
