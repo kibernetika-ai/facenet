@@ -109,7 +109,11 @@ def main():
                     start_time = time.time()
                     frame_count = 0
 
-            bounding_boxes, labels = facenet.process_frame(frame, args.threshold, frame_rate=frame_rate)
+                bounding_boxes, labels = facenet.process_frame(
+                    frame, args.threshold, frame_rate=frame_rate, overlays=False
+                )
+
+            facenet.add_overlays(frame, bounding_boxes, labels, frame_rate=frame_rate)
 
             frame_count += 1
             if args.image is None:
@@ -122,7 +126,6 @@ def main():
                 print(bounding_boxes)
                 print(labels)
                 break
-
 
     except (KeyboardInterrupt, SystemExit) as e:
         print('Caught %s: %s' % (e.__class__.__name__, e))

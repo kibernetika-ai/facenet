@@ -100,7 +100,7 @@ class OpenVINOFacenet(object):
             self.bg_remove_drv = drv()
             self.bg_remove_drv.load_model(bg_remove_path)
 
-    def process_frame(self, frame, threshold=0.5, frame_rate=None):
+    def process_frame(self, frame, threshold=0.5, frame_rate=None, overlays=True):
 
         if self.bg_remove and self.bg_remove_drv:
             input = cv2.resize(frame[:, :, ::-1].astype(np.float32), (160, 160)) / 255.0
@@ -249,9 +249,18 @@ class OpenVINOFacenet(object):
                     })
 
         # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
+        if overlays:
+            self.add_overlays(frame, bounding_boxes_overlays, labels, frame_rate)
+        return bounding_boxes_overlays, labels
 
-        add_overlays(frame, bounding_boxes_overlays, frame_rate, labels=labels)
-        return bounding_boxes, labels
+    @staticmethod
+    def add_overlays(frame, boxes, labels=None, frame_rate=None, align_to_right=True):
+        add_overlays(
+            frame, boxes,
+            frame_rate=frame_rate,
+            labels=labels,
+            align_to_right=align_to_right
+        )
 
 
 def add_overlays(frame, boxes, frame_rate=None, labels=None, align_to_right=True):
