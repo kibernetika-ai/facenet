@@ -112,7 +112,7 @@ class OpenVINOFacenet(object):
         return output[self.facenet_output]
 
     def process_output(self, output, bbox):
-        detected_indicies = []
+        detected_indices = []
         bounding_boxes = []
         bounding_boxes_overlays = []
         labels = []
@@ -135,72 +135,43 @@ class OpenVINOFacenet(object):
 
             if isinstance(clf, neighbors.KNeighborsClassifier):
 
-                (closest_distances, neighbors_indices) = clf.kneighbors(output, n_neighbors=30)
-                eval_values = closest_distances[:, 0]
-
                 def get_label(idx):
-                    if not self.debug:
-                        return self.class_names[best_class_indices[idx]]
+                    (closest_distances, neighbors_indices) = clf.kneighbors(output, n_neighbors=30)
+                    eval_values = closest_distances[:, 0]
                     first_cnt = 1
                     for i in neighbors_indices[0]:
                         if clf._y[i] != best_class_indices[idx]:
                             break
                         first_cnt += 1
                     cnt = len(clf._y[clf._y == best_class_indices[idx]])
-                    return '%s (%.3f %d/%d %.1f%%)' % (
-                        self.class_names[best_class_indices[idx]],
+                    label = self.class_names[best_class_indices[idx]]
+                    label_debug = '%s (%.3f %d/%d %.1f%%)' % (
+                        label,
                         eval_values[idx],
                         first_cnt, cnt,
                         first_cnt / cnt * 100,
                     )
-
-                def is_skipped(value):
-                    if self.debug:
-                        return False
-                    return value > 0.9
-
-                def is_recognized(value):
-                    return value <= 0.8
+                    return label, label_debug
 
             else:
 
-                eval_values = predictions[np.arange(len(best_class_indices)), best_class_indices]
-
                 def get_label(idx):
-                    if not self.debug:
-                        return self.class_names[best_class_indices[idx]]
-                    return '%s (%.1f%%)' % (
-                        self.class_names[best_class_indices[idx]],
-                        eval_values[idx] * 100,
-                    )
-
-                def is_skipped(value):
-                    if self.debug:
-                        return False
-                    return value == 0
-
-                def is_recognized(value):
-                    return value >= 30
+                    eval_values = predictions[np.arange(len(best_class_indices)), best_class_indices]
+                    label = self.class_names[best_class_indices[idx]]
+                    label_debug = '%s (%.1f%%)' % (label, eval_values[idx] * 100)
+                    return label, label_debug
 
             for i in range(len(best_class_indices)):
 
-                detected_indicies.append(best_class_indices[i])
+                detected_indices.append(best_class_indices[i])
 
-                label = get_label(i)
-                # if self.debug:
-                #     if is_skipped(eval_values[i]):
-                #         act = "skippd"
-                #     elif is_recognized(eval_values[i]):
-                #         act = "recogn"
-                #     else:
-                #         act = "detect"
-                #     label = "%s %s" % (act, label)
+                label, label_debug = get_label(i)
                 if self.debug and len(self.classifier_names) > 1:
-                    label = '%s: %s' % (self.classifier_names[clfi], label)
-                label_strings.append(label)
-                print(label)
+                    label_debug = '%s: %s' % (self.classifier_names[clfi], label_debug)
+                label_strings.append(label_debug if self.debug else label)
+                print(label_debug)
 
-        thin = not self.debug and len(set(detected_indicies)) > 1
+        thin = not self.debug and len(set(detected_indices)) > 1
         color = (0, 0, 255) if thin else (0, 255, 0)
 
         bb = bbox.astype(int)
@@ -216,7 +187,7 @@ class OpenVINOFacenet(object):
             if len(label_strings) > 0:
                 overlay_label = "\n".join(label_strings)
         else:
-            if len(set(detected_indicies)) == 1:
+            if len(set(detected_indices)) == 1:
                 overlay_label = label_strings[0]
 
         if overlay_label != "":
