@@ -25,7 +25,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import argparse
+import base_args
 import os
 import random
 import shutil
@@ -38,6 +38,9 @@ import tensorflow as tf
 
 import openvino_detection
 import facenet
+
+import bg_remove
+
 
 # tf.logging.set_verbosity(tf.logging.INFO)
 LOG = tf.logging
@@ -64,15 +67,14 @@ def main(args):
     drv = driver.load_driver("openvino")
     # Instantinate driver
     serving = drv()
-    model = (
-        "/opt/intel/computer_vision_sdk/deployment_tools/intel_models/"
-        "face-detection-retail-0004/FP32/face-detection-retail-0004.xml"
-    )
     serving.load_model(
-        model,
+        args.face_detection_path,
         device="CPU",
         flexible_batch_size=True,
     )
+
+    bg_rm_drv = bg_remove.get_driver(args.bg_remove_path)
+
     input_name = list(serving.inputs.keys())[0]
     output_name = list(serving.outputs.keys())[0]
 
@@ -110,6 +112,9 @@ def main(args):
                         print_fun('WARNING: Unable to align "%s", shape %s' % (image_path, img.shape))
                         text_file.write('%s\n' % output_filename)
                         continue
+
+                    if bg_rm_drv is not None:
+                        img = bg_rm_drv.apply_mask(img)
 
                     serving_img = cv2.resize(img, (300, 300), interpolation=cv2.INTER_AREA)
                     serving_img = np.transpose(serving_img, [2, 0, 1]).reshape([1, 3, 300, 300])
@@ -171,7 +176,6 @@ def main(args):
                                 os.makedirs(output_class_dir)
                         cv2.imwrite(output_filename_n, cropped)
 
-
     print_fun('Total number of images: %d' % nrof_images_total)
     print_fun('Number of successfully aligned images: %d' % nrof_successfully_aligned)
     build_id = os.environ.get('BUILD_ID', None)
@@ -181,8 +185,7 @@ def main(args):
 
 
 def parse_arguments(argv):
-    parser = argparse.ArgumentParser()
-
+    parser = base_args.parser()
     parser.add_argument(
         'input_dir',
         type=str,
