@@ -78,7 +78,7 @@ def load_nets(**kwargs):
         LOG.info('Load FACE DETECTION')
         global openvino_facenet
         openvino_facenet = od.OpenVINOFacenet(
-            kwargs.get('device'),
+            'some',
             PARAMS.get('face_detection_path'),
             facenet_path=None,
             classifier=[PARAMS['classifier']],
