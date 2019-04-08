@@ -216,7 +216,6 @@ class OpenVINOFacenet(object):
                         #     label = "%s %s" % (act, label)
                         if self.debug and len(self.classifier_names) > 1:
                             label = '%s: %s' % (self.classifier_names[clfi], label)
-
                         label_strings.append(label)
                         print(label)
 
