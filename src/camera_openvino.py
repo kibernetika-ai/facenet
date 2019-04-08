@@ -13,7 +13,7 @@ LOG = logging.getLogger(__name__)
 
 
 def get_parser():
-    parser = openvino_args.base_parser('Test movidius')
+    parser = openvino_args.parser('Test movidius')
     parser.add_argument(
         '--image',
         default=None,

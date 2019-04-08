@@ -17,14 +17,15 @@ LOG = logging.getLogger(__name__)
 
 
 def get_parser():
-    parser = openvino_args.base_parser('Test movidius')
+    parser = openvino_args.parser('Test movidius')
     parser.add_argument(
         '--video',
+        type=str,
         help='Path to the source video file to be processed (or URL to camera).',
     )
     parser.add_argument(
         '--output',
-        default=None,
+        type=str,
         help='Path to the output (processed) video file to write to.',
     )
     parser.add_argument(
@@ -40,6 +41,10 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
+    if args.video is None:
+        print("No input video specified")
+        return
+
     facenet = openvino_args.OpenVINOFacenet(args)
 
     video = cv2.VideoCapture(args.video)
@@ -48,13 +53,12 @@ def main():
     width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    # Remove file if any
-    try:
-        os.remove(args.output)
-    except:
-        pass
-
     if args.output is not None:
+        # Remove file if any
+        try:
+            os.remove(args.output)
+        except:
+            pass
         # Read codec information from input video.
         ex = int(video.get(cv2.CAP_PROP_FOURCC))
         codec = (
@@ -201,9 +205,6 @@ def merge_audio_with(original_video_file, target_video_file):
     code = subprocess.call(shlex.split(cmd))
     if code != 0:
         raise RuntimeError("Saving video with sound failed: exit code %s" % code)
-
-
-
 
 
 if __name__ == "__main__":

@@ -10,8 +10,7 @@ from sklearn import svm
 
 import openvino_nets as nets
 import utils
-
-from ml_serving.drivers import driver
+import bg_remove
 
 
 class OpenVINOFacenet(object):
@@ -26,7 +25,6 @@ class OpenVINOFacenet(object):
             debug=False):
 
         self.use_classifiers = False
-        self.bg_remove = False
         self.debug = debug
 
         extensions = os.environ.get('INTEL_EXTENSIONS_PATH')
@@ -98,19 +96,11 @@ class OpenVINOFacenet(object):
                     self.embedding_sizes.append(embedding_size)
                     self.classifiers.append(classifier)
 
-        if bg_remove_path:
-            self.bg_remove = True
-            print('Load BG_REMOVE model')
-            drv = driver.load_driver('tensorflow')
-            self.bg_remove_drv = drv()
-            self.bg_remove_drv.load_model(bg_remove_path)
+        self.bg_remove = bg_remove.get_driver(bg_remove_path)
 
     def detect_faces(self, frame, threshold=0.5):
-        if self.bg_remove and self.bg_remove_drv:
-            input = cv2.resize(frame[:, :, ::-1].astype(np.float32), (160, 160)) / 255.0
-            outputs = self.bg_remove_drv.predict({'image': np.expand_dims(input, 0)})
-            mask = cv2.resize(outputs['output'][0], (frame.shape[1], frame.shape[0]))
-            bounding_boxes_frame = frame * np.expand_dims(mask, 2)
+        if self.bg_remove is not None:
+            bounding_boxes_frame = self.bg_remove.apply_mask(frame)
         else:
             bounding_boxes_frame = frame
 
