@@ -15,7 +15,14 @@ from ml_serving.drivers import driver
 
 
 class OpenVINOFacenet(object):
-    def __init__(self, device, face_detection_path, facenet_path=None, classifier=None, bg_remove_path=None, debug=False):
+    def __init__(
+            self,
+            device,
+            face_detection_path,
+            facenet_path=None,
+            classifier=None,
+            bg_remove_path=None,
+            debug=False):
 
         self.use_classifiers = False
         self.bg_remove = False
@@ -88,7 +95,7 @@ class OpenVINOFacenet(object):
 
         if bg_remove_path:
             self.bg_remove = True
-            print('Load bg_remove model')
+            print('Load BG_REMOVE model')
             drv = driver.load_driver('tensorflow')
             self.bg_remove_drv = drv()
             self.bg_remove_drv.load_model(bg_remove_path)
@@ -115,7 +122,6 @@ class OpenVINOFacenet(object):
             for img_idx, img in enumerate(imgs):
 
                 label_strings = []
-                color = (0, 255, 0)
 
                 # Infer
                 # t = time.time()
@@ -128,6 +134,8 @@ class OpenVINOFacenet(object):
                 # output = face_net.infer({facenet_input: img})
                 # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
                 # output = output[facenet_output]
+
+                detected_indicies = []
 
                 for clfi, clf in enumerate(self.classifiers):
 
@@ -142,15 +150,16 @@ class OpenVINOFacenet(object):
                         )
                         continue
 
-
                     best_class_indices = np.argmax(predictions, axis=1)
 
                     if isinstance(clf, neighbors.KNeighborsClassifier):
 
-                        def get_label(idx):
+                        (closest_distances, neighbors_indices) = clf.kneighbors(output, n_neighbors=30)
+                        eval_values = closest_distances[:, 0]
 
-                            (closest_distances, neighbors_indices) = clf.kneighbors(output, n_neighbors=30)
-                            eval_values = closest_distances[:, 0]
+                        def get_label(idx):
+                            if not self.debug:
+                                return self.class_names[best_class_indices[idx]]
                             first_cnt = 1
                             for i in neighbors_indices[0]:
                                 if clf._y[i] != best_class_indices[idx]:
@@ -174,47 +183,71 @@ class OpenVINOFacenet(object):
 
                     else:
 
+                        eval_values = predictions[np.arange(len(best_class_indices)), best_class_indices]
+
                         def get_label(idx):
-                            eval_values = predictions[np.arange(len(best_class_indices)), best_class_indices]
+                            if not self.debug:
+                                return self.class_names[best_class_indices[idx]]
                             return '%s (%.1f%%)' % (
                                 self.class_names[best_class_indices[idx]],
                                 eval_values[idx] * 100,
                             )
 
                         def is_skipped(value):
+                            if self.debug:
+                                return False
                             return value == 0
 
                         def is_recognized(value):
                             return value >= 30
 
-
                     for i in range(len(best_class_indices)):
 
+                        detected_indicies.append(best_class_indices[i])
+
                         label = get_label(i)
-                        if len(self.classifier_names) > 1:
+                        # if self.debug:
+                        #     if is_skipped(eval_values[i]):
+                        #         act = "skippd"
+                        #     elif is_recognized(eval_values[i]):
+                        #         act = "recogn"
+                        #     else:
+                        #         act = "detect"
+                        #     label = "%s %s" % (act, label)
+                        if self.debug and len(self.classifier_names) > 1:
                             label = '%s: %s' % (self.classifier_names[clfi], label)
 
                         label_strings.append(label)
                         print(label)
 
+                thin = not self.debug and len(set(detected_indicies)) > 1
+                color = (0, 0, 255) if thin else (0, 255, 0)
+
                 bb = bounding_boxes_detected[img_idx].astype(int)
                 bounding_boxes.append(bb)
                 bounding_boxes_overlays.append({
                     'bb': bb,
-                    'thin': False,
+                    'thin': thin,
                     'color': color,
                 })
-                if len(label_strings) > 0:
+
+                overlay_label = ""
+                if self.debug:
+                    if len(label_strings) > 0:
+                        overlay_label = "\n".join(label_strings)
+                else:
+                    if len(set(detected_indicies)) == 1:
+                        overlay_label = label_strings[0]
+
+                if overlay_label != "":
                     labels.append({
-                        'label': "\n".join(label_strings),
+                        'label': overlay_label,
                         'left': bb[0],
                         'top': bb[1],
                         'right': bb[2],
                         'bottom': bb[3],
                         'color': color,
                     })
-
-
 
         # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
 
