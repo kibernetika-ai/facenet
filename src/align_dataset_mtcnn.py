@@ -25,22 +25,21 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import base_args
+import hashlib
 import os
-import random
+import pickle
 import shutil
 import sys
 
 import cv2
-from ml_serving.drivers import driver
 import numpy as np
 import tensorflow as tf
+from ml_serving.drivers import driver
 
-import openvino_detection
-import facenet
-
+import base_args
 import bg_remove
-
+import facenet
+import openvino_detection
 
 # tf.logging.set_verbosity(tf.logging.INFO)
 LOG = tf.logging
@@ -52,9 +51,38 @@ def print_fun(s):
 
 
 def main(args):
+
     output_dir = os.path.expanduser(args.output_dir)
-    shutil.rmtree(output_dir, ignore_errors=True)
-    os.makedirs(output_dir)
+    bounding_boxes_filename = os.path.join(output_dir, 'bounding_boxes.txt')
+    align_filename = os.path.join(output_dir, 'align.pkl')
+
+    align_data_args = dict(vars(args))
+    # the next arguments can be changed w/o changing aligned images
+    del align_data_args['complementary']
+    del align_data_args['input_dir']
+    del align_data_args['output_dir']
+
+    align_data = {}
+    clear_output_dir = True
+    if args.complementary:
+        if os.path.isfile(align_filename):
+            print_fun("Check previous align data")
+            with open(align_filename, 'rb') as infile:
+                (align_data_args_loaded, align_data_loaded) = pickle.load(infile)
+                if align_data_args == align_data_args_loaded:
+                    print_fun("Loaded data about %d aligned classes" % len(align_data_loaded))
+                    align_data = align_data_loaded
+                    clear_output_dir = False
+                else:
+                    print_fun("Previous align data is for another arguments, skipped")
+
+    if clear_output_dir:
+        print_fun("Clearing output dir")
+        shutil.rmtree(output_dir, ignore_errors=True)
+
+    if not os.path.isdir(output_dir):
+        print_fun("Creating output dir")
+        os.makedirs(output_dir)
 
     # Store some git revision info in a text file in the log directory
     src_path, _ = os.path.split(os.path.realpath(__file__))
@@ -80,26 +108,22 @@ def main(args):
 
     threshold = 0.5
 
-    # Add a random key to the filename to allow alignment using multiple processes
-    random_key = np.random.randint(0, high=99999)
-    bounding_boxes_filename = os.path.join(output_dir, 'bounding_boxes_%05d.txt' % random_key)
     min_face_area = args.min_face_size ** 2
 
     with open(bounding_boxes_filename, "w") as text_file:
         nrof_images_total = 0
         nrof_successfully_aligned = 0
-        if args.random_order:
-            random.shuffle(dataset)
         for cls in dataset:
             output_class_dir = os.path.join(output_dir, cls.name)
             output_class_dir_created = False
-            if args.random_order:
-                random.shuffle(cls.image_paths)
+            if cls.name in align_data:
+                align_data_class = align_data[cls.name]
+            else:
+                align_data_class = {}
             for image_path in cls.image_paths:
                 nrof_images_total += 1
                 filename = os.path.splitext(os.path.split(image_path)[1])[0]
                 output_filename = os.path.join(output_class_dir, filename + '.png')
-                print_fun(image_path)
                 if not os.path.exists(output_filename):
                     try:
                         img = cv2.imread(image_path, cv2.IMREAD_COLOR).astype(np.float32)
@@ -107,6 +131,13 @@ def main(args):
                         error_message = '{}: {}'.format(image_path, e)
                         print_fun('ERROR: %s' % error_message)
                         continue
+
+                    img_hash = hashlib.sha1(img.tostring()).hexdigest()
+                    if image_path in align_data_class and align_data_class[image_path] == img_hash:
+                        print_fun("%s - cached" % image_path)
+                        continue
+                    align_data_class[image_path] = hashlib.sha1(img.tostring()).hexdigest()
+                    print_fun(image_path)
 
                     if len(img.shape) <= 2:
                         print_fun('WARNING: Unable to align "%s", shape %s' % (image_path, img.shape))
@@ -176,6 +207,11 @@ def main(args):
                                 os.makedirs(output_class_dir)
                         cv2.imwrite(output_filename_n, cropped)
 
+            align_data[cls.name] = align_data_class
+
+    with open(align_filename, 'wb') as align_file:
+        pickle.dump((align_data_args, align_data), align_file, protocol=2)
+
     print_fun('Total number of images: %d' % nrof_images_total)
     print_fun('Number of successfully aligned images: %d' % nrof_successfully_aligned)
     build_id = os.environ.get('BUILD_ID', None)
@@ -215,8 +251,8 @@ def parse_arguments(argv):
         default=32
     )
     parser.add_argument(
-        '--random_order',
-        help='Shuffles the order of images to enable alignment using multiple processes.',
+        '--complementary',
+        help='Сomplementary training, existing aligned images in output dir supplements with new ones from input dir.',
         action='store_true'
     )
     return parser.parse_args(argv)
