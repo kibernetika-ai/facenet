@@ -153,7 +153,7 @@ spec:
     command: >-
       kuberlab-serving --driver openvino --model-path $FACENET_DIR/facenet.xml --hooks serving_hook.py
       {{- if .bgrm.value }}
-      -o bg-remove-path $BGRM_DIR
+      -o bg_remove_path=$BGRM_DIR
       {{- end }}
       -o classifiers_path=$MODEL_DIR -o flexible_batch_size=True
       -o use_face_detection=true -o face_detection_path=$FACE_DETECTION_DIR/face-detection.xml

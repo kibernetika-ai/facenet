@@ -23,7 +23,8 @@ PARAMS = {
     'use_face_detection': True,
     'face_detection_path': '',
     'tf_path': '/tf-data',
-    'debug': False
+    'debug': False,
+    'bg_remove_path': None,
 }
 width = 640
 height = 480
@@ -95,6 +96,7 @@ def load_nets(**kwargs):
             classifier=classifiers,
             loaded_plugin=kwargs.get('plugin'),
             debug=PARAMS['debug'],
+            bg_remove_path=PARAMS['bg_remove_path'],
         )
     else:
         plugin = kwargs.get('plugin')
