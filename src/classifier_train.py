@@ -28,21 +28,23 @@ from __future__ import print_function
 
 import argparse
 import datetime
+import hashlib
+import json
 import math
 import os
-from os import path
 import pickle
-import sys
 import shutil
+import sys
 import time
+from os import path
 
 import numpy as np
-from sklearn import svm
+from ml_serving.drivers import driver
 from sklearn import neighbors
+from sklearn import svm
+from tensorflow import logging
 
 import facenet
-from ml_serving.drivers import driver
-from tensorflow import logging
 
 try:
     from mlboardclient.api import client
@@ -181,9 +183,8 @@ def main(args):
     # Load the model
     print_fun('Loading feature extraction model')
 
-    # Load driver
+    # Load and instantinate driver
     drv = driver.load_driver(args.driver)
-    # Instantinate driver
     serving = drv()
     serving.load_model(
         args.model,
@@ -196,88 +197,80 @@ def main(args):
     # Run forward pass to calculate embeddings
     print_fun('Calculating features for images')
 
+    noise_count = max(0, args.noise_count) if args.noise else 0
+    emb_args = {
+        'model': args.model,
+        'use_split_dataset': args.use_split_dataset,
+        'noise': noise_count > 0,
+        'noise_count': noise_count,
+        'flip': args.flip,
+        'image_size': args.image_size,
+        'min_nrof_images_per_class': args.min_nrof_images_per_class,
+        'nrof_train_images_per_class': args.nrof_train_images_per_class,
+    }
+
+    classifier_filename_exp = os.path.expanduser(args.classifier)
+
+    stored_embeddings = {}
+    if args.mode == 'TRAIN':
+        embeddings_filename = os.path.join(
+            args.data_dir,
+            "embeddings-%s.pkl" % hashlib.md5(json.dumps(emb_args, sort_keys=True).encode()).hexdigest(),
+        )
+        if os.path.isfile(embeddings_filename):
+            print_fun("Found stored embeddings data, loading...")
+            with open(embeddings_filename, 'rb') as embeddings_file:
+                stored_embeddings = pickle.load(embeddings_file)
+
     total_time = 0.
 
     nrof_images = len(paths)
-    nrof_batches_per_epoch = int(math.ceil(1.0 * nrof_images / args.batch_size))
-    embeddings_size = nrof_images
-    if args.noise:
-        embeddings_size += nrof_images * args.noise_count * (2 if args.flip else 1)
 
-    if args.flip:
-        embeddings_size += nrof_images * 1
+    nrof_batches_per_epoch = int(math.ceil(1.0 * nrof_images / args.batch_size))
+    epp = embeddings_per_path(noise_count, args.flip)
+    embeddings_size = nrof_images * epp
 
     emb_array = np.zeros((embeddings_size, 512))
+    fit_labels = []
+
+    emb_index = 0
     for i in range(nrof_batches_per_epoch):
         start_index = i * args.batch_size
         end_index = min((i + 1) * args.batch_size, nrof_images)
         paths_batch = paths[start_index:end_index]
+        labels_batch = labels[start_index:end_index]
 
-        if args.noise:
-            start_index += i * args.noise_count * (2 if args.flip else 1)
-            end_index += i * args.noise_count * (2 if args.flip else 1)
-
-        if args.flip:
-            start_index += i * 1
-            end_index += i * 1
+        # has_not_stored_embeddings = False
+        paths_batch_load, labels_batch_load = [], []
 
         for j in range(end_index - start_index):
-            print_fun('Batch {} <-> {}'.format(paths_batch[j], labels[start_index + j]))
-        images = facenet.load_data(paths_batch, False, False, args.image_size)
+            # print_fun(os.path.split(paths_batch[j]))
+            cls_name = dataset[labels_batch[j]].name
+            cached = True
+            if cls_name not in stored_embeddings or paths_batch[j] not in stored_embeddings[cls_name]:
+                # has_not_stored_embeddings = True
+                cached = False
+                paths_batch_load.append(paths_batch[j])
+                labels_batch_load.append(labels_batch[j])
+            else:
+                embeddings = stored_embeddings[cls_name][paths_batch[j]]
+                emb_array[emb_index:emb_index + len(embeddings), :] = stored_embeddings[cls_name][paths_batch[j]]
+                fit_labels.extend([labels_batch[j]] * len(embeddings))
+                emb_index += len(embeddings)
 
-        images_size = len(images)
-        if args.noise:
-            for k in range(images_size):
-                img = images[k]
-                for i in range(args.noise_count):
-                    print_fun(
-                        'Applying noise to image {}, #{}'.format(
-                            paths_batch[k], i + 1
-                        )
-                    )
-                    noised = facenet.random_noise(img)
+            print_fun('Batch {} <-> {} {} {}'.format(
+                paths_batch[j], labels_batch[j], cls_name, "cached" if cached else "",
+            ))
 
-                    # Expand labels
-                    labels.insert(start_index+k, labels[start_index+k])
-                    # Add image to list
-                    images = np.concatenate((images, noised.reshape(1, *noised.shape)))
-                    end_index += 1
+        if len(paths_batch_load) == 0:
+            continue
 
-                    if args.flip:
-                        print_fun(
-                            'Applying flip to noised image {}, #{}'.format(
-                                paths_batch[k], i + 1
-                            )
-                        )
-                        flipped = facenet.horizontal_flip(noised)
-                        # Expand labels
-                        labels.insert(start_index+k, labels[start_index+k])
-                        # Add image to list
-                        images = np.concatenate((images, flipped.reshape(1, *flipped.shape)))
-                        end_index += 1
-
-
-        if args.flip:
-            for k in range(images_size):
-                img = images[k]
-                for i in range(1):
-                    print_fun(
-                        'Applying flip to image {}, #{}'.format(
-                            paths_batch[k], i + 1
-                        )
-                    )
-                    flipped = facenet.horizontal_flip(img)
-                    # Expand labels
-                    labels.insert(start_index+k, labels[start_index+k])
-                    # Add image to list
-                    images = np.concatenate((images, flipped.reshape(1, *flipped.shape)))
-                    end_index += 1
+        images = load_data(paths_batch_load, labels_batch_load, args.image_size, noise_count, args.flip)
 
         if serving.driver_name == 'tensorflow':
             feed_dict = {'input:0': images, 'phase_train:0': False}
         elif serving.driver_name == 'openvino':
             input_name = list(serving.inputs.keys())[0]
-
             # Transpose image for channel first format
             images = images.transpose([0, 3, 1, 2])
             feed_dict = {input_name: images}
@@ -287,15 +280,33 @@ def main(args):
         t = time.time()
         outputs = serving.predict(feed_dict)
         total_time += time.time() - t
-        emb_array[start_index:end_index, :] = list(outputs.values())[0]
 
-    classifier_filename_exp = os.path.expanduser(args.classifier)
+        emb_outputs = list(outputs.values())[0]
+
+        if args.mode == "TRAIN":
+            for n, e in enumerate(emb_outputs):
+                cls_name = dataset[labels_batch_load[n]].name
+                if cls_name not in stored_embeddings:
+                    stored_embeddings[cls_name] = {}
+                path = paths_batch_load[n]
+                if path not in stored_embeddings[cls_name]:
+                    stored_embeddings[cls_name][path] = []
+                stored_embeddings[cls_name][path].append(e)
+
+        emb_array[emb_index:emb_index + len(images), :] = emb_outputs
+        fit_labels.extend(labels_batch_load)
+
+        emb_index += len(images)
+
     average_time = total_time / embeddings_size * 1000
     print_fun('Average time: %.3fms' % average_time)
 
     if args.mode == 'TRAIN':
+
+        with open(embeddings_filename, 'wb') as embeddings_file:
+            pickle.dump(stored_embeddings, embeddings_file, protocol=2)
+
         # Train classifier
-        model = None
         print_fun('Classifier algorithm %s' % args.algorithm)
         update_data({'classifier_algorithm': args.algorithm}, use_mlboard, mlboard)
         if args.algorithm == 'SVM':
@@ -303,7 +314,8 @@ def main(args):
         else:
             # n_neighbors = int(round(np.sqrt(len(emb_array))))
             model = neighbors.KNeighborsClassifier(n_neighbors=args.knn_neighbors, weights='distance')
-        model.fit(emb_array, labels)
+
+        model.fit(emb_array, fit_labels)
 
         # Create a list of class names
         class_names = [cls.name.replace('_', ' ') for cls in dataset]
@@ -379,6 +391,55 @@ def main(args):
             )
 
 
+def embeddings_per_path(noise_count=0, flip=False):
+    # each image with noise count multiplied by 2 if flipped (for each - original and noised)
+    return (1 + noise_count) * (2 if flip else 1)
+
+
+def load_data(paths_batch, labels, image_size=160, noise_count=0, flip=False):
+    if len(paths_batch) != len(labels):
+        raise RuntimeError("load_data: len(paths_batch) = %d != len(labels) = %d", len(paths_batch), len(labels))
+
+    images = facenet.load_data(paths_batch, False, False, image_size)
+    images_size = len(images)
+
+    if flip:
+        for k in range(images_size):
+            img = images[k]
+            # print_fun('Applying flip to image {}'.format(paths_batch[k]))
+            flipped = facenet.horizontal_flip(img)
+            images = np.concatenate((images, flipped.reshape(1, *flipped.shape)))
+            labels.append(labels[k])
+            paths_batch.append(paths_batch[k])
+
+    if noise_count > 0:
+        for k in range(images_size):
+            img = images[k]
+            for i in range(noise_count):
+                # print_fun('Applying noise to image {}, #{}'.format(paths_batch[k], i + 1))
+                noised = facenet.random_noise(img)
+                images = np.concatenate((images, noised.reshape(1, *noised.shape)))
+                labels.append(labels[k])
+                paths_batch.append(paths_batch[k])
+
+                if flip:
+                    # print_fun('Applying flip to noised image {}, #{}'.format(paths_batch[k], i + 1))
+                    flipped = facenet.horizontal_flip(noised)
+                    images = np.concatenate((images, flipped.reshape(1, *flipped.shape)))
+                    labels.append(labels[k])
+                    paths_batch.append(paths_batch[k])
+
+    print_fun(' ... %d images (%d original, %d flip, %d noise, %d noise+flip' % (
+        len(images),
+        len(paths_batch),
+        len(paths_batch) * (1 if flip else 0),
+        len(paths_batch) * noise_count,
+        len(paths_batch) * (noise_count if flip else 0),
+    ))
+
+    return images
+
+
 def split_dataset(dataset, min_nrof_images_per_class, nrof_train_images_per_class):
     train_set = []
     test_set = []
@@ -428,7 +489,7 @@ def parse_arguments(argv):
     )
     parser.add_argument(
         '--knn-neighbors',
-        help='kNN neighbors count.',
+        help='Neighbors count (only for kNN classifier).',
         type=int,
         default=1,
     )
