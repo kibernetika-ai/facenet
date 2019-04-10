@@ -36,7 +36,6 @@ import pickle
 import shutil
 import sys
 import time
-from os import path
 
 import numpy as np
 from ml_serving.drivers import driver
@@ -70,19 +69,19 @@ def catalog_ref(name, ctype, version):
         format(os.environ.get('WORKSPACE_NAME'), ctype, name, version)
 
 
-def upload_model(use_mlboard, mlboard, classifier_path, model, version):
+def upload_model(use_mlboard, mlboard, classifiers_path, model, version):
     if not use_mlboard or not mlboard:
         print_fun("Skipped: no mlboard detected")
         return
 
     print_fun('Uploading model...')
-    dirname = '/tmp/classifier'
-    os.makedirs(dirname)
-    shutil.copy(classifier_path, path.join(dirname, path.basename(classifier_path)))
+    # dirname = '/tmp/classifier'
+    # os.makedirs(dirname)
+    # shutil.copy(classifiers_path, path.join(dirname, path.basename(classifiers_path)))
     # shutil.shutil.copy()
-    mlboard.model_upload(model, version, dirname)
+    mlboard.model_upload(model, version, classifiers_path)
 
-    shutil.rmtree(dirname)
+    # shutil.rmtree(dirname)
     update_data({'model_reference': catalog_ref(model, 'mlmodel', version)}, use_mlboard, mlboard)
     print_fun("New model uploaded as '%s', version '%s'." % (model, version))
 
@@ -135,6 +134,8 @@ def confusion(y_test, y_score, labels, draw):
 
 
 def main(args):
+    algorithms = ["kNN", "SVM"]
+
     use_mlboard = False
     mlboard = None
     if client:
@@ -208,8 +209,6 @@ def main(args):
         'min_nrof_images_per_class': args.min_nrof_images_per_class,
         'nrof_train_images_per_class': args.nrof_train_images_per_class,
     }
-
-    classifier_filename_exp = os.path.expanduser(args.classifier)
 
     stored_embeddings = {}
     if args.mode == 'TRAIN':
@@ -298,83 +297,109 @@ def main(args):
 
         emb_index += len(images)
 
-    average_time = total_time / embeddings_size * 1000
-    print_fun('Average time: %.3fms' % average_time)
+    # average_time = total_time / embeddings_size * 1000
+    # print_fun('Average time: %.3fms' % average_time)
+
+    classifiers_path = os.path.expanduser(args.classifiers_path)
 
     if args.mode == 'TRAIN':
 
+        # Save embeddings
         with open(embeddings_filename, 'wb') as embeddings_file:
             pickle.dump(stored_embeddings, embeddings_file, protocol=2)
 
-        # Train classifier
-        print_fun('Classifier algorithm %s' % args.algorithm)
-        update_data({'classifier_algorithm': args.algorithm}, use_mlboard, mlboard)
-        if args.algorithm == 'SVM':
-            model = svm.SVC(kernel='linear', probability=True)
-        else:
-            # n_neighbors = int(round(np.sqrt(len(emb_array))))
-            model = neighbors.KNeighborsClassifier(n_neighbors=args.knn_neighbors, weights='distance')
-
-        model.fit(emb_array, fit_labels)
+        # Clear (or create) classifiers directory
+        try:
+            shutil.rmtree(classifiers_path, ignore_errors=True)
+        except:
+            pass
+        os.makedirs(classifiers_path)
 
         # Create a list of class names
         class_names = [cls.name.replace('_', ' ') for cls in dataset]
         print_fun('Classes:')
         print_fun(class_names)
 
-        # Saving classifier model
-        with open(classifier_filename_exp, 'wb') as outfile:
-            pickle.dump((model, class_names), outfile, protocol=2)
-        print_fun('Saved classifier model to file "%s"' % classifier_filename_exp)
-        update_data({'average_time': '%.3fms' % average_time}, use_mlboard, mlboard)
+        # Train classifiers
+        for algorithm in algorithms:
+            if args.only_algorithm is not None and algorithm != args.only_algorithm:
+                continue
+
+            print_fun('Classifier algorithm %s' % algorithm)
+            # update_data({'classifier_algorithm': args.algorithm}, use_mlboard, mlboard)
+            if algorithm == 'SVM':
+                model = svm.SVC(kernel='linear', probability=True)
+            elif algorithm == 'kNN':
+                # n_neighbors = int(round(np.sqrt(len(emb_array))))
+                model = neighbors.KNeighborsClassifier(n_neighbors=args.knn_neighbors, weights='distance')
+            else:
+                raise RuntimeError("Classifier algorithm %s not supported" % algorithm)
+
+            model.fit(emb_array, fit_labels)
+
+            # Saving classifier model
+            classifier_filename = get_classifier_path(classifiers_path, algorithm)
+            with open(classifier_filename, 'wb') as outfile:
+                pickle.dump((model, class_names), outfile, protocol=2)
+            print_fun('Saved classifier model to file "%s"' % classifier_filename)
+            # update_data({'average_time_%s': '%.3fms' % average_time}, use_mlboard, mlboard)
 
     elif args.mode == 'CLASSIFY':
+
+        summary_accuracy = 1
+
         # Classify images
-        print_fun('Testing classifier')
-        with open(classifier_filename_exp, 'rb') as infile:
-            (model, class_names) = pickle.load(infile)
+        for algorithm in algorithms:
+            print_fun('Testing classifier %s' % algorithm)
+            classifier_filename = get_classifier_path(classifiers_path, algorithm)
+            with open(classifier_filename, 'rb') as infile:
+                (model, class_names) = pickle.load(infile)
 
-        print_fun('Loaded classifier model from file "%s"' % classifier_filename_exp)
+            print_fun('Loaded classifier model from file "%s"' % classifier_filename)
 
-        predictions = model.predict_proba(emb_array)
-        best_class_indices = np.argmax(predictions, axis=1)
-        if isinstance(model, neighbors.KNeighborsClassifier):
-            param_name = 'distance'
-            clf_name = "knn"
-            (closest_distances, _) = model.kneighbors(emb_array)
-            eval_values = closest_distances[:, 0]
-        else:
-            param_name = 'probability'
-            clf_name = "svm"
-            eval_values = predictions[np.arange(len(best_class_indices)), best_class_indices]
-
-        for i in range(len(best_class_indices)):
-            predicted = best_class_indices[i]
-            if predicted == labels[i]:
-                print_fun('%4d  %s: %s %.3f' % (
-                    i, class_names[predicted], param_name, eval_values[i],
-                ))
+            predictions = model.predict_proba(emb_array)
+            best_class_indices = np.argmax(predictions, axis=1)
+            if isinstance(model, neighbors.KNeighborsClassifier):
+                param_name = 'distance'
+                # clf_name = "knn"
+                (closest_distances, _) = model.kneighbors(emb_array)
+                eval_values = closest_distances[:, 0]
+            elif isinstance(model, svm.SVC):
+                param_name = 'probability'
+                # clf_name = "svm"
+                eval_values = predictions[np.arange(len(best_class_indices)), best_class_indices]
             else:
-                print_fun('%4d  %s: %s %.3f, WRONG! Should be %s.' % (
-                    i, class_names[predicted], param_name, eval_values[i], class_names[labels[i]]),
-                )
+                raise RuntimeError("Unsupported classifier type: %s" % type(model))
 
-        accuracy = np.mean(np.equal(best_class_indices, labels))
+            for i in range(len(best_class_indices)):
+                predicted = best_class_indices[i]
+                if predicted == labels[i]:
+                    print_fun('%4d  %s: %s %.3f' % (
+                        i, class_names[predicted], param_name, eval_values[i],
+                    ))
+                else:
+                    print_fun('%4d  %s: %s %.3f, WRONG! Should be %s.' % (
+                        i, class_names[predicted], param_name, eval_values[i], class_names[labels[i]]),
+                              )
 
-        rpt = confusion(labels, best_class_indices, class_names, use_mlboard and not args.skip_draw_confusion_matrix)
-        data = {
-            'accuracy': accuracy,
-            'average_time': '%.3fms' % average_time
-        }
-        if not args.skip_draw_confusion_matrix:
-            data['#documents.confusion_matrix.html'] = rpt
-        update_data(data, use_mlboard, mlboard)
+            accuracy = np.mean(np.equal(best_class_indices, labels))
+            summary_accuracy = min(summary_accuracy, accuracy)
 
-        print_fun('Accuracy: %.3f' % accuracy)
+            rpt = confusion(labels, best_class_indices, class_names,
+                            use_mlboard and not args.skip_draw_confusion_matrix)
+            data = {
+                'accuracy': accuracy,
+                # 'average_time': '%.3fms' % average_time
+            }
+            if not args.skip_draw_confusion_matrix:
+                data['#documents.confusion_matrix.html'] = rpt
+            update_data(data, use_mlboard, mlboard)
 
-        if args.upload_model and accuracy >= args.upload_threshold:
+            print_fun('Accuracy for %s: %.3f' % (algorithm, accuracy))
+
+        if args.upload_model and summary_accuracy >= args.upload_threshold:
             timestamp = datetime.datetime.now().strftime('%s')
-            model_name = 'facenet-classifier-%s' % clf_name
+            model_name = 'facenet-classifier'
 
             if args.device == 'MYRIAD':
                 model_name = model_name + "-movidius"
@@ -385,10 +410,14 @@ def main(args):
             upload_model(
                 use_mlboard,
                 mlboard,
-                classifier_filename_exp,
+                classifiers_path,
                 model_name,
                 version
             )
+
+
+def get_classifier_path(classifiers_path, algorithm):
+    return os.path.join(classifiers_path, "classifier-%s.pkl" % algorithm.lower())
 
 
 def embeddings_per_path(noise_count=0, flip=False):
@@ -482,15 +511,15 @@ def parse_arguments(argv):
         required=True,
     )
     parser.add_argument(
-        '--classifier',
-        help='Classifier model file name as a pickle (.pkl) file. ' +
-             'For training this is the output and for classification this is an input.',
+        '--classifiers_path',
+        help='Path to classifier models stored as pickle (.pkl) files. ' +
+             'For training this files are the output and for classification this are an input.',
         required=True,
     )
     parser.add_argument(
-        '--algorithm',
-        help='Classifier algorithm.',
-        default="kNN",
+        '--only_algorithm',
+        help='Train only specified classifier.',
+        default=None,
         choices=["SVM", "kNN"],
     )
     parser.add_argument(

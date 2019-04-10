@@ -38,11 +38,11 @@ spec:
     - command: python classifier_train.py
         TRAIN $TRAINING_DIR/aligned-images
         --model $FACENET_DIR/facenet.xml
-        --classifier $TRAINING_DIR/classifier-knn.pkl
-        --algorithm kNN
+        --classifiers_path $TRAINING_DIR/classifiers
         --flip --noise --noise-count 3
         --driver openvino
         --device CPU
+        --batch_size 10
       default_volume_mapping: true
       images:
         cpu: kuberlab/serving:latest-openvino
@@ -63,11 +63,12 @@ spec:
     - command: python classifier_train.py
         CLASSIFY $TRAINING_DIR/aligned-images
         --model $FACENET_DIR/facenet.xml
-        --classifier $TRAINING_DIR/classifier.pkl
+        --classifiers_path $TRAINING_DIR/classifiers
         --upload-model
         --upload-threshold 0.9
         --driver openvino
         --device CPU
+        --skip-draw-confusion-matrix
       default_volume_mapping: true
       images:
         cpu: kuberlab/serving:latest-openvino
