@@ -400,6 +400,8 @@ def load_data(paths_batch, labels, image_size=160, noise_count=0, flip=False):
     if len(paths_batch) != len(labels):
         raise RuntimeError("load_data: len(paths_batch) = %d != len(labels) = %d", len(paths_batch), len(labels))
 
+    init_batch_len = len(paths_batch)
+
     images = facenet.load_data(paths_batch, False, False, image_size)
     images_size = len(images)
 
@@ -429,13 +431,17 @@ def load_data(paths_batch, labels, image_size=160, noise_count=0, flip=False):
                     labels.append(labels[k])
                     paths_batch.append(paths_batch[k])
 
-    print_fun(' ... %d images (%d original, %d flip, %d noise, %d noise+flip' % (
-        len(images),
-        len(paths_batch),
-        len(paths_batch) * (1 if flip else 0),
-        len(paths_batch) * noise_count,
-        len(paths_batch) * (noise_count if flip else 0),
-    ))
+    batch_log = ' ... %d images' % len(images)
+    if noise_count > 0 or flip:
+        batch_log_details = ['%d original' % init_batch_len]
+        if noise_count > 0:
+            batch_log_details.append('%d noise' % (init_batch_len * noise_count))
+        if flip:
+            batch_log_details.append('%d flip' % init_batch_len)
+        if noise_count > 0 and flip:
+            batch_log_details.append('%d noise+flip' % (init_batch_len * noise_count))
+        batch_log = '%s (%s)' % (batch_log, ', '.join(batch_log_details))
+    print_fun(batch_log)
 
     return images
 
