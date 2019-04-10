@@ -12,6 +12,9 @@ spec:
     resources:
     - command: python align_dataset_mtcnn.py
         $FACES_DIR $TRAINING_DIR/aligned-images
+        {{- if .bg_remove.value }}
+        --bg-remove-path $BG_REMOVE_DIR
+        {{- end }}
         --image_size 160
         --margin 32
       default_volume_mapping: true
@@ -34,7 +37,11 @@ spec:
     - command: python classifier_train.py
         TRAIN $TRAINING_DIR/aligned-images
         --model $FACENET_DIR/facenet.xml
+        {{- if .bg_remove.value }}
+        --bg-remove-path $BG_REMOVE_DIR
+        {{- end }}
         --classifier $TRAINING_DIR/classifier.pkl
+        --algorithm kNN --flip --noise --noise-count 3
         --driver openvino
         --device CPU
       default_volume_mapping: true
@@ -145,6 +152,9 @@ spec:
       gpu: "kuberlab/serving:latest-openvino-gpu"
     command: >-
       kuberlab-serving --driver openvino --model-path $FACENET_DIR/facenet.xml --hooks serving_hook.py
+      {{- if .bg_remove.value }}
+      -o bg-remove-path $BG_REMOVE_DIR
+      {{- end }}
       -o classifier=$MODEL_DIR/classifier.pkl -o flexible_batch_size=True
       -o use_face_detection=true -o face_detection_path=$FACE_DETECTION_DIR/face-detection.xml
       -o device=CPU
@@ -232,4 +242,12 @@ spec:
       version: {{ .faces.version }}
     {{- else }}
     clusterStorage: {{ .storage.value }}
+    {{- end }}
+    {{- if .bg_remove.value }}
+  - isLibDir: false
+    name: bg_remove
+    model:
+      workspace: {{ .bg_remove.workspace }}
+      model: {{ .bg_remove.value }}
+      version: {{ .bg_remove.version }}
     {{- end }}
