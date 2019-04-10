@@ -9,7 +9,7 @@ def parser(description=None):
     )
     p.add_argument(
         '--face-detection-path',
-        default='/opt/intel/computer_vision_sdk/deployment_tools/intel_models/'
+        default='/opt/intel/openvino/deployment_tools/intel_models/'
                 'face-detection-retail-0004/FP32/face-detection-retail-0004.xml',
         help='Path to face-detection-retail openvino model',
     )
