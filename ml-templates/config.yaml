@@ -17,6 +17,7 @@ spec:
         {{- end }}
         --image_size 160
         --margin 32
+        --complementary
       default_volume_mapping: true
       images:
         cpu: kuberlab/serving:latest-openvino
@@ -37,11 +38,9 @@ spec:
     - command: python classifier_train.py
         TRAIN $TRAINING_DIR/aligned-images
         --model $FACENET_DIR/facenet.xml
-        {{- if .bgrm.value }}
-        --bg-remove-path $BGRM_DIR
-        {{- end }}
-        --classifier $TRAINING_DIR/classifier.pkl
-        --algorithm kNN --flip --noise --noise-count 3
+        --classifier $TRAINING_DIR/classifier-knn.pkl
+        --algorithm kNN
+        --flip --noise --noise-count 3
         --driver openvino
         --device CPU
       default_volume_mapping: true
