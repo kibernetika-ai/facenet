@@ -78,12 +78,15 @@ def load_nets(**kwargs):
         pnets, rnet, onet = detect_face.create_mtcnn(sess, model_path)
     elif use_face:
         LOG.info('Load FACE DETECTION')
-        classifiers_path = PARAMS['classifiers_path']
-        if not os.path.isdir(classifiers_path):
-            raise RuntimeError("Classifiers path %s is absent or is not directory" % classifiers_path)
-        classifiers = [f for f in os.listdir(classifiers_path) if os.path.isfile(os.path.join(classifiers_path, f))]
+        clf_path = PARAMS['classifiers_path']
+        if not os.path.isdir(clf_path):
+            raise RuntimeError("Classifiers path %s is absent or is not directory" % clf_path)
+        classifiers = \
+            [os.path.join(clf_path, f) for f in os.listdir(clf_path) if os.path.isfile(os.path.join(clf_path, f))]
         if len(classifiers) == 0:
-            raise RuntimeError("Classifiers path %s has no any files" % classifiers_path)
+            raise RuntimeError("Classifiers path %s has no any files" % clf_path)
+        # LOG.info('Classifiers path: {}'.format(classifiers_path))
+        # LOG.info('Classifier files: {}'.format(classifiers))
         global openvino_facenet
         openvino_facenet = od.OpenVINOFacenet(
             'some',
