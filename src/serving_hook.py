@@ -1,27 +1,29 @@
 import base64
 import json
 import logging
+import os
 
 import cv2
 import numpy as np
 from openvino import inference_engine as ie
 
-from align import detect_face
 import camera_openvino as ko
 import openvino_detection as od
 import openvino_nets as nets
+from align import detect_face
 
 LOG = logging.getLogger(__name__)
 PARAMS = {
     'device': 'CPU',
     'align_model_dir': 'openvino-cpu',
     'resolutions': '26x37,37x52,52x74,145x206',
-    'classifier': '',
+    'classifiers_path': '',
     'threshold': [0.6, 0.7, 0.7],
     'use_tf': False,
     'use_face_detection': True,
     'face_detection_path': '',
-    'tf_path': '/tf-data'
+    'tf_path': '/tf-data',
+    'debug': False
 }
 width = 640
 height = 480
@@ -76,13 +78,20 @@ def load_nets(**kwargs):
         pnets, rnet, onet = detect_face.create_mtcnn(sess, model_path)
     elif use_face:
         LOG.info('Load FACE DETECTION')
+        classifiers_path = PARAMS['classifiers_path']
+        if not os.path.isdir(classifiers_path):
+            raise RuntimeError("Classifiers path %s is absent or is not directory" % classifiers_path)
+        classifiers = [f for f in os.listdir(classifiers_path) if os.path.isfile(os.path.join(classifiers_path, f))]
+        if len(classifiers) == 0:
+            raise RuntimeError("Classifiers path %s has no any files" % classifiers_path)
         global openvino_facenet
         openvino_facenet = od.OpenVINOFacenet(
             'some',
             PARAMS.get('face_detection_path'),
             facenet_path=None,
-            classifier=[PARAMS['classifier']],
+            classifier=classifiers,
             loaded_plugin=kwargs.get('plugin'),
+            debug=PARAMS['debug'],
         )
     else:
         plugin = kwargs.get('plugin')

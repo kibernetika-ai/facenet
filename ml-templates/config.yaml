@@ -155,7 +155,7 @@ spec:
       {{- if .bgrm.value }}
       -o bg-remove-path $BGRM_DIR
       {{- end }}
-      -o classifier=$MODEL_DIR/classifier.pkl -o flexible_batch_size=True
+      -o classifiers_path=$MODEL_DIR -o flexible_batch_size=True
       -o use_face_detection=true -o face_detection_path=$FACE_DETECTION_DIR/face-detection.xml
       -o device=CPU
     resources:
@@ -205,6 +205,13 @@ spec:
         workspace: kuberlab-demo
         model: openvino-face-detection
         version: 1.4.0-cpu
+    {{- if .bgrm.value }}
+    - name: bgrm
+      model:
+        workspace: {{ .bgrm.workspace }}
+        model: {{ .bgrm.value }}
+        version: {{ .bgrm.version }}
+    {{- end }}
     ports:
     - port: 9000
       targetPort: 9000
