@@ -316,9 +316,17 @@ def main(args):
         os.makedirs(classifiers_path)
 
         # Create a list of class names
-        class_names = [cls.name.replace('_', ' ') for cls in dataset]
+        dataset_class_names = [cls.name for cls in dataset]
+        class_names = [cls.replace('_', ' ') for cls in dataset_class_names]
         print_fun('Classes:')
         print_fun(class_names)
+
+        class_stats = [{} for _ in range(len(dataset_class_names))]
+        for cls in stored_embeddings:
+            class_stats[dataset_class_names.index(cls)] = {
+                'images': len(stored_embeddings[cls]),
+                'embeddings': sum(len(e) for e in stored_embeddings[cls].values()),
+            }
 
         # Train classifiers
         for algorithm in algorithms:
@@ -340,7 +348,7 @@ def main(args):
             # Saving classifier model
             classifier_filename = get_classifier_path(classifiers_path, algorithm)
             with open(classifier_filename, 'wb') as outfile:
-                pickle.dump((model, class_names), outfile, protocol=2)
+                pickle.dump((model, class_names, class_stats), outfile, protocol=2)
             print_fun('Saved classifier model to file "%s"' % classifier_filename)
             # update_data({'average_time_%s': '%.3fms' % average_time}, use_mlboard, mlboard)
 
@@ -353,7 +361,7 @@ def main(args):
             print_fun('Testing classifier %s' % algorithm)
             classifier_filename = get_classifier_path(classifiers_path, algorithm)
             with open(classifier_filename, 'rb') as infile:
-                (model, class_names) = pickle.load(infile)
+                (model, class_names, class_stats) = pickle.load(infile)
 
             print_fun('Loaded classifier model from file "%s"' % classifier_filename)
 
