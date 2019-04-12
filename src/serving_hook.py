@@ -2,7 +2,6 @@ import base64
 import json
 import logging
 import os
-import time
 
 import cv2
 import numpy as np
@@ -246,11 +245,12 @@ def postprocess(outputs, ctx, **kwargs):
         if ctx.skip:
             break
 
-        box_overlay, label = openvino_facenet.process_output(
+        box_overlay, label, prob = openvino_facenet.process_output(
             item_output, ctx.bounding_boxes[img_idx]
         )
         box_overlays.extend(box_overlay)
         labels.extend(label)
+        scores_out.extend(prob)
 
     table = []
     text_labels = []
@@ -271,7 +271,7 @@ def postprocess(outputs, ctx, **kwargs):
                 {
                     'type': 'text',
                     'name': text_labels[i] if i in text_labels else '',
-                    'prob': float(0.0),
+                    'prob': float(scores_out[i]),  # float(0.0),
                     'image': encoded
                 }
             )

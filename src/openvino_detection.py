@@ -3,14 +3,14 @@ import pickle
 
 import cv2
 import numpy as np
-from openvino import inference_engine as ie
 import six
+from openvino import inference_engine as ie
 from sklearn import neighbors
 from sklearn import svm
 
+import bg_remove
 import openvino_nets as nets
 import utils
-import bg_remove
 
 
 class OpenVINOFacenet(object):
@@ -62,6 +62,7 @@ class OpenVINOFacenet(object):
             self.classifier_names = []
             self.embedding_sizes = []
             self.class_names = None
+            self.class_stats = None
 
             for clfi, clf in enumerate(classifier):
                 # Load classifier
@@ -70,7 +71,7 @@ class OpenVINOFacenet(object):
                     opts = {'file': f}
                     if six.PY3:
                         opts['encoding'] = 'latin1'
-                    (classifier, class_names) = pickle.load(**opts)
+                    (classifier, class_names, class_stats) = pickle.load(**opts)
                     if isinstance(classifier, svm.SVC):
                         embedding_size = classifier.shape_fit_[1]
                         clfn = "SVM classifier"
@@ -78,7 +79,8 @@ class OpenVINOFacenet(object):
                     elif isinstance(classifier, neighbors.KNeighborsClassifier):
                         embedding_size = classifier._fit_X.shape[1]
                         clfn = "kNN (neighbors %d) classifier" % classifier.n_neighbors
-                        self.classifier_names.append("kNN(%2d)" % classifier.n_neighbors)
+                        # self.classifier_names.append("kNN(%2d)" % classifier.n_neighbors)
+                        self.classifier_names.append("kNN")
                     else:
                         # try embedding_size = 512
                         embedding_size = 512
@@ -87,12 +89,12 @@ class OpenVINOFacenet(object):
                     print('Loaded %s, embedding size: %d' % (clfn, embedding_size))
                     if self.class_names is None:
                         self.class_names = class_names
-                    else:
-                        if class_names != self.class_names:
-                            print("Different class names in classificators")
-                            print(class_names)
-                            print(self.class_names)
-                            exit(1)
+                    elif class_names != self.class_names:
+                        raise RuntimeError("Different class names in classifiers")
+                    if self.class_stats is None:
+                        self.class_stats = class_stats
+                    elif class_stats != self.class_stats:
+                        raise RuntimeError("Different class stats in classifiers")
                     self.embedding_sizes.append(embedding_size)
                     self.classifiers.append(classifier)
 
@@ -117,6 +119,8 @@ class OpenVINOFacenet(object):
         bounding_boxes_overlays = []
         labels = []
         label_strings = []
+        probs = []
+        prob_detected = True
 
         for clfi, clf in enumerate(self.classifiers):
 
@@ -125,53 +129,71 @@ class OpenVINOFacenet(object):
                 predictions = clf.predict_proba(output)
             except ValueError as e:
                 # Can not reshape
-                print(
-                    "ERROR: Output from graph doesn't consistent"
-                    " with classifier model: %s" % e
-                )
+                print("ERROR: Output from graph doesn't consistent with classifier model: %s" % e)
                 continue
 
             best_class_indices = np.argmax(predictions, axis=1)
 
             if isinstance(clf, neighbors.KNeighborsClassifier):
 
-                def get_label(idx):
-                    (closest_distances, neighbors_indices) = clf.kneighbors(output, n_neighbors=30)
+                def process_index(idx):
+                    cnt = self.class_stats[best_class_indices[idx]]['embeddings']
+                    (closest_distances, neighbors_indices) = clf.kneighbors(output, n_neighbors=cnt)
                     eval_values = closest_distances[:, 0]
-                    first_cnt = 1
+                    first_cnt = 0
                     for i in neighbors_indices[0]:
                         if clf._y[i] != best_class_indices[idx]:
                             break
                         first_cnt += 1
-                    cnt = len(clf._y[clf._y == best_class_indices[idx]])
-                    label = self.class_names[best_class_indices[idx]]
-                    label_debug = '%s (%.3f %d/%d %.1f%%)' % (
-                        label,
+                    # probability:
+                    # first matched embeddings
+                    # less than 25% is 0%, more than 75% is 100%
+                    # multiplied by distance coefficient:
+                    # 0.5 and less is 100%, 0.83 and more is 0%
+                    prob = max(0, min(1, 2 * first_cnt / cnt - .5)) * max(0, min(1, 2.5 - eval_values[idx] * 3))
+                    label_debug = '%.3f %d/%d' % (
                         eval_values[idx],
                         first_cnt, cnt,
-                        first_cnt / cnt * 100,
                     )
-                    return label, label_debug
+                    return prob, label_debug
+
+            elif isinstance(clf, svm.SVC):
+
+                def process_index(idx):
+                    eval_values = predictions[np.arange(len(best_class_indices)), best_class_indices]
+                    label_debug = '%.1f%%' % (eval_values[idx] * 100)
+                    return max(0, min(1, eval_values[idx] * 10)), label_debug
 
             else:
 
-                def get_label(idx):
-                    eval_values = predictions[np.arange(len(best_class_indices)), best_class_indices]
-                    label = self.class_names[best_class_indices[idx]]
-                    label_debug = '%s (%.1f%%)' % (label, eval_values[idx] * 100)
-                    return label, label_debug
+                print("ERROR: Unsupported model type: %s" % type(clf))
+                continue
 
             for i in range(len(best_class_indices)):
-
                 detected_indices.append(best_class_indices[i])
+                label = self.class_names[best_class_indices[i]]
+                prob, label_debug = process_index(i)
+                probs.append(prob)
+                if prob <= 0:
+                    prob_detected = False
+                label_debug_info = '%s: %.1f%% %s (%s)' % (self.classifier_names[clfi], prob * 100, label, label_debug)
+                if self.debug:
+                    label_strings.append(label_debug_info)
+                elif len(label_strings) == 0:
+                    label_strings.append(label)
+                print(label_debug_info)
 
-                label, label_debug = get_label(i)
-                if self.debug and len(self.classifier_names) > 1:
-                    label_debug = '%s: %s' % (self.classifier_names[clfi], label_debug)
-                label_strings.append(label_debug if self.debug else label)
-                print(label_debug)
+        # detected if all classes are the same, and all probs are more than 0
+        detected = len(set(detected_indices)) == 1 and prob_detected
+        mean_prob = sum(probs) / len(probs)
 
-        thin = not self.debug and len(set(detected_indices)) > 1
+        if self.debug:
+            if detected:
+                label_strings.append("Summary: %.1f%% %s" % (mean_prob * 100, label))
+            else:
+                label_strings.append("Summary: not detected")
+
+        thin = not detected
         color = (0, 0, 255) if thin else (0, 255, 0)
 
         bb = bbox.astype(int)
@@ -186,8 +208,7 @@ class OpenVINOFacenet(object):
         if self.debug:
             if len(label_strings) > 0:
                 overlay_label = "\n".join(label_strings)
-        else:
-            if len(set(detected_indices)) == 1:
+        elif detected:
                 overlay_label = label_strings[0]
 
         if overlay_label != "":
@@ -200,7 +221,7 @@ class OpenVINOFacenet(object):
                 'color': color,
             })
 
-        return bounding_boxes_overlays, labels
+        return bounding_boxes_overlays, labels, probs
 
     def process_frame(self, frame, threshold=0.5, frame_rate=None, overlays=True):
         bounding_boxes_detected = self.detect_faces(frame, threshold)
@@ -224,7 +245,7 @@ class OpenVINOFacenet(object):
                 # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
                 # output = output[facenet_output]
 
-                face_overlay, face_labels = self.process_output(output, bounding_boxes_detected[img_idx])
+                face_overlay, face_labels, _ = self.process_output(output, bounding_boxes_detected[img_idx])
                 bounding_boxes_overlays.extend(face_overlay)
                 labels.extend(face_labels)
 
