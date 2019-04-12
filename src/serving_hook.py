@@ -273,7 +273,7 @@ def postprocess(outputs, ctx, **kwargs):
                 {
                     'type': 'text',
                     'name': text_labels[i] if i in text_labels else '',
-                    'prob': float(scores_out[i]),  # float(0.0),
+                    'prob': float(scores_out[i]),
                     'image': encoded
                 }
             )

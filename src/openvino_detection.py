@@ -183,7 +183,7 @@ class OpenVINOFacenet(object):
 
         # detected if all classes are the same, and all probs are more than 0
         detected = len(set(detected_indices)) == 1 and prob_detected
-        mean_prob = sum(probs) / len(probs)
+        mean_prob = sum(probs) / len(probs) if detected else 0
 
         if self.debug:
             if detected:
