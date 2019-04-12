@@ -26,6 +26,8 @@ PARAMS = {
     'tf_path': '/tf-data',
     'debug': False,
     'bg_remove_path': None,
+    'output_type': 'bytes',
+    'need_table': 'true',
 }
 width = 640
 height = 480
@@ -251,31 +253,38 @@ def postprocess(outputs, ctx, **kwargs):
         labels.extend(label)
 
     table = []
-    text_labels = [l['label'] for l in labels]
-    for i, b in enumerate(ctx.bounding_boxes):
-        x_min = int(max(0, b[0]))
-        y_min = int(max(0, b[1]))
-        x_max = int(min(ctx.frame.shape[1], b[2]))
-        y_max = int(min(ctx.frame.shape[0], b[3]))
-        cim = ctx.frame[y_min:y_max, x_min:x_max]
-        # image_bytes = io.BytesIO()
-        cim = cv2.cvtColor(cim, cv2.COLOR_RGB2BGR)
-        image_bytes = cv2.imencode(".jpg", cim, params=[cv2.IMWRITE_JPEG_QUALITY, 95])[1].tostring()
+    text_labels = []
+    if PARAMS['need_table'] == 'true':
+        text_labels = [l['label'] for l in labels]
+        for i, b in enumerate(ctx.bounding_boxes):
+            x_min = int(max(0, b[0]))
+            y_min = int(max(0, b[1]))
+            x_max = int(min(ctx.frame.shape[1], b[2]))
+            y_max = int(min(ctx.frame.shape[0], b[3]))
+            cim = ctx.frame[y_min:y_max, x_min:x_max]
+            # image_bytes = io.BytesIO()
+            cim = cv2.cvtColor(cim, cv2.COLOR_RGB2BGR)
+            image_bytes = cv2.imencode(".jpg", cim, params=[cv2.IMWRITE_JPEG_QUALITY, 95])[1].tostring()
 
-        encoded = base64.encodebytes(image_bytes).decode()
-        table.append(
-            {
-                'type': 'text',
-                'name': text_labels[i] if i in text_labels else '',
-                'prob': float(0.0),
-                'image': encoded
-            }
-        )
+            encoded = base64.encodebytes(image_bytes).decode()
+            table.append(
+                {
+                    'type': 'text',
+                    'name': text_labels[i] if i in text_labels else '',
+                    'prob': float(0.0),
+                    'image': encoded
+                }
+            )
+
     if not ctx.skip:
         od.add_overlays(ctx.frame, box_overlays, 0, labels=labels)
 
     ctx.frame = cv2.cvtColor(ctx.frame, cv2.COLOR_RGB2BGR)
-    image_bytes = cv2.imencode(".jpg", ctx.frame, params=[cv2.IMWRITE_JPEG_QUALITY, 95])[1].tostring()
+
+    if PARAMS['output_type'] == 'bytes':
+        image_bytes = cv2.imencode(".jpg", ctx.frame, params=[cv2.IMWRITE_JPEG_QUALITY, 95])[1].tostring()
+    else:
+        image_bytes = ctx.frame
 
     return {
         'output': image_bytes,
