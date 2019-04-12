@@ -265,7 +265,7 @@ def postprocess(outputs, ctx, **kwargs):
         table.append(
             {
                 'type': 'text',
-                'name': text_labels[i],
+                'name': text_labels[i] if i in text_labels else '',
                 'prob': float(0.0),
                 'image': encoded
             }
