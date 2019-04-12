@@ -115,9 +115,6 @@ class OpenVINOFacenet(object):
 
     def process_output(self, output, bbox):
         detected_indices = []
-        bounding_boxes = []
-        bounding_boxes_overlays = []
-        labels = []
         label_strings = []
         probs = []
         prob_detected = True
@@ -171,16 +168,17 @@ class OpenVINOFacenet(object):
 
             for i in range(len(best_class_indices)):
                 detected_indices.append(best_class_indices[i])
-                label = self.class_names[best_class_indices[i]]
+                overlay_label = self.class_names[best_class_indices[i]]
                 prob, label_debug = process_index(i)
                 probs.append(prob)
                 if prob <= 0:
                     prob_detected = False
-                label_debug_info = '%s: %.1f%% %s (%s)' % (self.classifier_names[clfi], prob * 100, label, label_debug)
+                label_debug_info = '%s: %.1f%% %s (%s)' % (
+                self.classifier_names[clfi], prob * 100, overlay_label, label_debug)
                 if self.debug:
                     label_strings.append(label_debug_info)
                 elif len(label_strings) == 0:
-                    label_strings.append(label)
+                    label_strings.append(overlay_label)
                 print(label_debug_info)
 
         # detected if all classes are the same, and all probs are more than 0
@@ -189,7 +187,7 @@ class OpenVINOFacenet(object):
 
         if self.debug:
             if detected:
-                label_strings.append("Summary: %.1f%% %s" % (mean_prob * 100, label))
+                label_strings.append("Summary: %.1f%% %s" % (mean_prob * 100, overlay_label))
             else:
                 label_strings.append("Summary: not detected")
 
@@ -197,31 +195,31 @@ class OpenVINOFacenet(object):
         color = (0, 0, 255) if thin else (0, 255, 0)
 
         bb = bbox.astype(int)
-        bounding_boxes.append(bb)
-        bounding_boxes_overlays.append({
+        bounding_boxes_overlay = {
             'bb': bb,
             'thin': thin,
             'color': color,
-        })
+        }
 
-        overlay_label = ""
+        overlay_label_str = ""
         if self.debug:
             if len(label_strings) > 0:
-                overlay_label = "\n".join(label_strings)
+                overlay_label_str = "\n".join(label_strings)
         elif detected:
-                overlay_label = label_strings[0]
+            overlay_label_str = label_strings[0]
 
-        if overlay_label != "":
-            labels.append({
-                'label': overlay_label,
+        overlay_label = None
+        if overlay_label_str != "":
+            overlay_label = {
+                'label': overlay_label_str,
                 'left': bb[0],
                 'top': bb[1],
                 'right': bb[2],
                 'bottom': bb[3],
                 'color': color,
-            })
+            }
 
-        return bounding_boxes_overlays, labels, probs
+        return bounding_boxes_overlay, overlay_label, mean_prob
 
     def process_frame(self, frame, threshold=0.5, frame_rate=None, overlays=True):
         bounding_boxes_detected = self.detect_faces(frame, threshold)
@@ -245,9 +243,10 @@ class OpenVINOFacenet(object):
                 # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
                 # output = output[facenet_output]
 
-                face_overlay, face_labels, _ = self.process_output(output, bounding_boxes_detected[img_idx])
-                bounding_boxes_overlays.extend(face_overlay)
-                labels.extend(face_labels)
+                face_overlay, face_label, _ = self.process_output(output, bounding_boxes_detected[img_idx])
+                bounding_boxes_overlays.append(face_overlay)
+                if face_label:
+                    labels.append(face_label)
 
         # LOG.info('facenet: %.3fms' % ((time.time() - t) * 1000))
         if overlays:

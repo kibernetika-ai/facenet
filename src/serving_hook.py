@@ -248,11 +248,11 @@ def postprocess(outputs, ctx, **kwargs):
         box_overlay, label, prob = openvino_facenet.process_output(
             item_output, ctx.bounding_boxes[img_idx]
         )
-        box_overlays.extend(box_overlay)
-        labels.extend(label)
-        scores_out.extend(prob)
-        LOG.info("prob = {}".format(prob))
-        LOG.info("scores_out = {}".format(scores_out))
+        box_overlays.append(box_overlay)
+        labels.append(label)
+        scores_out.append(prob)
+        # LOG.info("prob = {}".format(prob))
+        # LOG.info("scores_out = {}".format(scores_out))
 
     table = []
     text_labels = []
