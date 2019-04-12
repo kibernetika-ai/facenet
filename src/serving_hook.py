@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 import os
+import time
 
 import cv2
 import numpy as np
@@ -234,7 +235,7 @@ def preprocess(inputs, ctx, **kwargs):
 
 def postprocess(outputs, ctx, **kwargs):
     facenet_output = list(outputs.values())[0]
-    LOG.info('output shape = {}'.format(facenet_output.shape))
+    # LOG.info('output shape = {}'.format(facenet_output.shape))
 
     labels = []
     box_overlays = []
