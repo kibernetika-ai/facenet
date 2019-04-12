@@ -251,6 +251,8 @@ def postprocess(outputs, ctx, **kwargs):
         box_overlays.extend(box_overlay)
         labels.extend(label)
         scores_out.extend(prob)
+        LOG.info("prob = {}".format(prob))
+        LOG.info("scores_out = {}".format(scores_out))
 
     table = []
     text_labels = []
