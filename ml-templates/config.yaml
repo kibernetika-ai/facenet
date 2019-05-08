@@ -12,9 +12,6 @@ spec:
     resources:
     - command: python align_dataset_mtcnn.py
         $FACES_DIR $TRAINING_DIR/aligned-images
-        {{- if .bgrm.value }}
-        --bg-remove-path $BGRM_DIR
-        {{- end }}
         --image_size 160
         --margin 32
         --complementary
@@ -42,7 +39,7 @@ spec:
         --flip --noise --noise-count 3
         --driver openvino
         --device CPU
-        --batch_size 10
+        --batch_size 2
       default_volume_mapping: true
       images:
         cpu: kuberlab/serving:latest-openvino
@@ -152,9 +149,6 @@ spec:
       gpu: "kuberlab/serving:latest-openvino-gpu"
     command: >-
       kuberlab-serving --driver openvino --model-path $FACENET_DIR/facenet.xml --hooks serving_hook.py
-      {{- if .bgrm.value }}
-      -o bg_remove_path=$BGRM_DIR
-      {{- end }}
       -o classifiers_path=$MODEL_DIR -o flexible_batch_size=True
       -o use_face_detection=true -o face_detection_path=$FACE_DETECTION_DIR/face-detection.xml
       -o device=CPU
@@ -205,13 +199,6 @@ spec:
         workspace: kuberlab-demo
         model: openvino-face-detection
         version: 1.4.0-cpu
-    {{- if .bgrm.value }}
-    - name: bgrm
-      model:
-        workspace: {{ .bgrm.workspace }}
-        model: {{ .bgrm.value }}
-        version: {{ .bgrm.version }}
-    {{- end }}
     ports:
     - port: 9000
       targetPort: 9000
@@ -251,10 +238,3 @@ spec:
     clusterStorage: {{ .storage.value }}
     {{- end }}
     {{- if .bgrm.value }}
-  - isLibDir: false
-    name: bgrm
-    model:
-      workspace: {{ .bgrm.workspace }}
-      model: {{ .bgrm.value }}
-      version: {{ .bgrm.version }}
-    {{- end }}

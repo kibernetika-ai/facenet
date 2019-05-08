@@ -29,11 +29,3 @@ faces:
  wizard:
    name: "Faces Dataset"
    kind: dataset
-
-bgrm:
-  value: 'coco-bg-rm'
-  version: '1.0.0'
-  workspace: 'kuberlab-demo'
-  wizard:
-    name: "Background removal model (uses before faces detection)"
-    kind: model
