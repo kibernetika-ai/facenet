@@ -237,4 +237,3 @@ spec:
     {{- else }}
     clusterStorage: {{ .storage.value }}
     {{- end }}
-    {{- if .bgrm.value }}
